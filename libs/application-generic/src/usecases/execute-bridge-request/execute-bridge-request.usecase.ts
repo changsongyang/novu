@@ -41,30 +41,36 @@ import { BRIDGE_EXECUTION_ERROR } from '../../utils';
 import { HttpRequestHeaderKeysEnum } from '../../http';
 import { Instrument, InstrumentUsecase } from '../../instrumentation';
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
 export const DEFAULT_TIMEOUT = 5_000; // 5 seconds
 export const DEFAULT_RETRIES_LIMIT = 3;
-export const RETRYABLE_HTTP_CODES: number[] = [
-  408, // Request Timeout
-  429, // Too Many Requests
-  500, // Internal Server Error
-  503, // Service Unavailable
-  504, // Gateway Timeout
-  // https://developers.cloudflare.com/support/troubleshooting/cloudflare-errors/troubleshooting-cloudflare-5xx-errors/
-  521, // CloudFlare web server is down
-  522, // CloudFlare connection timed out
-  524, // CloudFlare a timeout occurred
-];
-const RETRYABLE_ERROR_CODES: string[] = [
-  'EAI_AGAIN', //    DNS resolution failed, retry
-  'ECONNREFUSED', // Connection refused by the server
-  'ECONNRESET', //   Connection was forcibly closed by a peer
-  'EADDRINUSE', //   Address already in use
-  'EPIPE', //        Broken pipe
-  'ETIMEDOUT', //    Operation timed out
-  'ENOTFOUND', //    DNS lookup failed
-  'EHOSTUNREACH', // No route to host
-  'ENETUNREACH', //  Network is unreachable
-];
+export const RETRYABLE_HTTP_CODES: number[] = isTestEnv
+  ? []
+  : [
+      408, // Request Timeout
+      429, // Too Many Requests
+      500, // Internal Server Error
+      503, // Service Unavailable
+      504, // Gateway Timeout
+      // https://developers.cloudflare.com/support/troubleshooting/cloudflare-errors/troubleshooting-cloudflare-5xx-errors/
+      521, // CloudFlare web server is down
+      522, // CloudFlare connection timed out
+      524, // CloudFlare a timeout occurred
+    ];
+export const RETRYABLE_ERROR_CODES: string[] = isTestEnv
+  ? []
+  : [
+      'EAI_AGAIN', //    DNS resolution failed, retry
+      'ECONNREFUSED', // Connection refused by the server
+      'ECONNRESET', //   Connection was forcibly closed by a peer
+      'EADDRINUSE', //   Address already in use
+      'EPIPE', //        Broken pipe
+      'ETIMEDOUT', //    Operation timed out
+      'ENOTFOUND', //    DNS lookup failed
+      'EHOSTUNREACH', // No route to host
+      'ENETUNREACH', //  Network is unreachable
+    ];
 
 const LOG_CONTEXT = 'ExecuteBridgeRequest';
 
@@ -144,25 +150,52 @@ export class ExecuteBridgeRequest {
       timeout: DEFAULT_TIMEOUT,
       json: command.event,
       retry: {
-        calculateDelay: ({ attemptCount, computedValue }) => {
-          if (computedValue === 0) {
-            /*
-             * If the computed value is 0, the retry conditions were not met and we don't want to retry.
-             * The retry condition is only met when the response has a `statusCodes` or `errorCodes`
-             * that matches the supplied retry configuration values.
-             * @see https://github.com/sindresorhus/got/blob/3034c2fdcebdff94907a6e015a8b154e851fc343/documentation/7-retry.md?plain=1#L130
-             */
-            return 0;
-          }
-
-          if (attemptCount === retriesLimit) {
-            return 0;
-          }
-
-          return 2 ** attemptCount * 1000;
-        },
+        limit: retriesLimit,
+        methods: ['GET', 'POST'],
         statusCodes: RETRYABLE_HTTP_CODES,
         errorCodes: RETRYABLE_ERROR_CODES,
+        calculateDelay: ({ attemptCount, error }) => {
+          if (attemptCount > retriesLimit) {
+            Logger.log(
+              `Exceeded retry limit of ${retriesLimit}. Stopping retries.`,
+              LOG_CONTEXT,
+            );
+
+            return 0;
+          }
+
+          // Check if the error status code is in our retryable codes
+          if (
+            error?.response?.statusCode &&
+            RETRYABLE_HTTP_CODES.includes(error.response.statusCode)
+          ) {
+            const delay = 2 ** attemptCount * 1000;
+            Logger.log(
+              `Retryable status code ${error.response.statusCode} detected. Retrying in ${delay}ms`,
+              LOG_CONTEXT,
+            );
+
+            return delay;
+          }
+
+          // Check if the error code is in our retryable error codes
+          if (error?.code && RETRYABLE_ERROR_CODES.includes(error.code)) {
+            const delay = 2 ** attemptCount * 1000;
+            Logger.log(
+              `Retryable error code ${error.code} detected. Retrying in ${delay}ms`,
+              LOG_CONTEXT,
+            );
+
+            return delay;
+          }
+
+          Logger.log(
+            'Error is not retryable. Stopping retry attempts.',
+            LOG_CONTEXT,
+          );
+
+          return 0; // Don't retry for other errors
+        },
       },
       https: {
         /*
@@ -460,7 +493,6 @@ export class ExecuteBridgeRequest {
             BRIDGE_EXECUTION_ERROR.UNKNOWN_BRIDGE_REQUEST_ERROR.message(url),
           code: BRIDGE_EXECUTION_ERROR.UNKNOWN_BRIDGE_REQUEST_ERROR.code,
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          cause: error,
         };
       }
     } else {
@@ -474,12 +506,12 @@ export class ExecuteBridgeRequest {
           BRIDGE_EXECUTION_ERROR.UNKNOWN_BRIDGE_NON_REQUEST_ERROR.message(url),
         code: BRIDGE_EXECUTION_ERROR.UNKNOWN_BRIDGE_NON_REQUEST_ERROR.code,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        cause: error,
       };
     }
 
     const fullBridgeError: BridgeError = {
       ...bridgeErrorData,
+      cause: error,
       url,
     };
 
