@@ -3,7 +3,7 @@ import { FeatureFlagsKeysEnum, FlagType } from '@novu/shared';
 import { LaunchDarklyFeatureFlagsService } from './launch-darkly.service';
 import { ProcessEnvFeatureFlagsService } from './process-env.service';
 
-import { IFeatureFlagsService, IFeatureFlagContext } from './types';
+import { IFeatureFlagContext, IFeatureFlagsService } from './types';
 
 const LOG_CONTEXT = 'FeatureFlagsService';
 
