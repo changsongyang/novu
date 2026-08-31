@@ -1,4 +1,5 @@
 export * from './apns/apns.provider';
+export * from './appio/appio.provider';
 export * from './expo/expo.provider';
 export * from './fcm/fcm.provider';
 export * from './one-signal/one-signal.provider';

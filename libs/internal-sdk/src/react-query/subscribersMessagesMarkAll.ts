@@ -12,6 +12,17 @@ import { subscribersMessagesMarkAll } from "../funcs/subscribersMessagesMarkAll.
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
 import * as components from "../models/components/index.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
@@ -27,18 +38,35 @@ export type SubscribersMessagesMarkAllMutationVariables = {
 export type SubscribersMessagesMarkAllMutationData =
   operations.SubscribersV1ControllerMarkAllUnreadAsReadResponse;
 
+export type SubscribersMessagesMarkAllMutationError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
 /**
- * Marks all the subscriber messages as read, unread, seen or unseen. Optionally you can pass feed id (or array) to mark messages of a particular feed.
+ * Update all notifications state
+ *
+ * @remarks
+ * This API is deprecated, use v2 API instead. Update all subscriber in-app notifications state such as read, unread, seen or unseen by **subscriberId**.
+ *
+ * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
  */
 export function useSubscribersMessagesMarkAllMutation(
   options?: MutationHookOptions<
     SubscribersMessagesMarkAllMutationData,
-    Error,
+    SubscribersMessagesMarkAllMutationError,
     SubscribersMessagesMarkAllMutationVariables
   >,
 ): UseMutationResult<
   SubscribersMessagesMarkAllMutationData,
-  Error,
+  SubscribersMessagesMarkAllMutationError,
   SubscribersMessagesMarkAllMutationVariables
 > {
   const client = useNovuContext();

@@ -1,4 +1,4 @@
-import { it, describe, beforeEach, expect, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MissingSecretKeyError } from '../../errors';
 import { workflow } from './workflow.resource';
 
@@ -122,6 +122,29 @@ describe('workflow function', () => {
       channels: {
         email: { enabled: true },
       },
+    });
+  });
+
+  it('should discover a tool channel step', async () => {
+    const { discover } = workflow('tool-workflow', async ({ step }) => {
+      await step.tool('send-tool', async () => ({
+        body: 'Tool body',
+      }));
+    });
+
+    const definition = await discover();
+
+    expect(definition.steps).to.have.length(1);
+    expect(definition.steps[0]).to.include({
+      stepId: 'send-tool',
+      type: 'tool',
+    });
+    expect(definition.steps[0].outputs.schema).toMatchObject({
+      type: 'object',
+      properties: {
+        body: { type: 'string' },
+      },
+      required: ['body'],
     });
   });
 
@@ -348,7 +371,7 @@ describe('workflow function', () => {
           payload: {},
           to: 'test@test.com',
         })
-      ).rejects.toThrowError(
+      ).rejects.toThrow(
         `Workflow with id: \`test-workflow\` has invalid \`payload\`. Please provide the correct payload`
       );
     });
@@ -394,6 +417,64 @@ describe('workflow function', () => {
           method: 'POST',
         })
       );
+    });
+
+    it('should include agent override in trigger payload', async () => {
+      const testWorkflow = workflow('test-workflow', async ({ step }) => {
+        await step.custom('custom', async () => ({
+          foo: 'bar',
+        }));
+      });
+
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => {
+          return Promise.resolve({
+            transactionId: '123',
+          });
+        },
+      });
+      global.fetch = fetchMock;
+
+      await testWorkflow.trigger({
+        to: 'test@test.com',
+        payload: {
+          free: 'field',
+        },
+        agentId: 'support-agent',
+      });
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.agentId).toEqual('support-agent');
+    });
+
+    it('should include explicit null agent in trigger payload', async () => {
+      const testWorkflow = workflow('test-workflow', async ({ step }) => {
+        await step.custom('custom', async () => ({
+          foo: 'bar',
+        }));
+      });
+
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => {
+          return Promise.resolve({
+            transactionId: '123',
+          });
+        },
+      });
+      global.fetch = fetchMock;
+
+      await testWorkflow.trigger({
+        to: 'test@test.com',
+        payload: {
+          free: 'field',
+        },
+        agentId: null,
+      });
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.agentId).toBeNull();
     });
 
     it('should make an API call when provided with a valid payload', async () => {
@@ -493,6 +574,116 @@ describe('workflow function', () => {
             Authorization: `ApiKey ${process.env.NOVU_SECRET_KEY}`,
           },
           method: 'DELETE',
+        })
+      );
+    });
+
+    it('should handle various context payload formats', async () => {
+      const testWorkflow = workflow('test-workflow', async ({ step }) => {
+        await step.custom('custom', async () => ({
+          foo: 'bar',
+        }));
+      });
+
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => {
+          return Promise.resolve({
+            transactionId: '123',
+          });
+        },
+      });
+      global.fetch = fetchMock;
+
+      await testWorkflow.trigger({
+        to: 'test@test.com',
+        payload: {
+          name: 'John',
+        },
+        context: {
+          // Simple string value
+          user: 'john-doe',
+
+          // Rich object with full data
+          tenant: {
+            id: 'org-acme',
+            data: { name: 'Acme Corp', plan: 'enterprise', region: 'us-east' },
+          },
+          // Rich object without data field
+          app: {
+            id: 'jira',
+          },
+        },
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching('/events/trigger'),
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'test-workflow',
+            to: 'test@test.com',
+            payload: {
+              name: 'John',
+            },
+            context: {
+              user: 'john-doe',
+              tenant: {
+                id: 'org-acme',
+                data: { name: 'Acme Corp', plan: 'enterprise', region: 'us-east' },
+              },
+              app: {
+                id: 'jira',
+              },
+            },
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `ApiKey ${process.env.NOVU_SECRET_KEY}`,
+          },
+          method: 'POST',
+        })
+      );
+    });
+
+    it('should work without context properties', async () => {
+      const testWorkflow = workflow('test-workflow', async ({ step }) => {
+        await step.custom('custom', async () => ({
+          foo: 'bar',
+        }));
+      });
+
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => {
+          return Promise.resolve({
+            transactionId: '123',
+          });
+        },
+      });
+      global.fetch = fetchMock;
+
+      await testWorkflow.trigger({
+        to: 'test@test.com',
+        payload: {
+          name: 'John',
+        },
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching('/events/trigger'),
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'test-workflow',
+            to: 'test@test.com',
+            payload: {
+              name: 'John',
+            },
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `ApiKey ${process.env.NOVU_SECRET_KEY}`,
+          },
+          method: 'POST',
         })
       );
     });

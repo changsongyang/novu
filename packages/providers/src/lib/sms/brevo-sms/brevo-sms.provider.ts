@@ -5,13 +5,6 @@ import { SmsProviderIdEnum } from '@novu/shared';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
 import { WithPassthrough } from '../../../utils/types';
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  interface RequestInit {
-    agent: ProxyAgent;
-  }
-}
-
 export class BrevoSmsProvider extends BaseProvider implements ISmsProvider {
   id = SmsProviderIdEnum.BrevoSms;
   channelType = ChannelTypeEnum.SMS as ChannelTypeEnum.SMS;
@@ -47,9 +40,13 @@ export class BrevoSmsProvider extends BaseProvider implements ISmsProvider {
       },
       agent: new ProxyAgent(),
       body: JSON.stringify(sms.body),
-    });
+    } as RequestInit);
 
     const body: { messageId: string } = await response.json();
+
+    if (!body.messageId) {
+      throw new Error(`Failed: ${JSON.stringify(body)}`);
+    }
 
     return {
       id: body.messageId,

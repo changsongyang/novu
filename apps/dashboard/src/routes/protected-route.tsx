@@ -1,17 +1,39 @@
-import { Navigate } from 'react-router-dom';
-import { SignedIn, SignedOut } from '@clerk/clerk-react';
-import { ROUTES } from '@/utils/routes';
+import { RedirectToSignIn, Show, useAuth } from '@clerk/react';
+import { MemberRoleEnum, PermissionsEnum } from '@novu/shared';
+import { ReactNode } from 'react';
 import { EnvironmentProvider } from '@/context/environment/environment-provider';
+import { PermissionProtectedRoute } from './permission-protected-route';
 
-export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+interface ProtectedRouteProps {
+  children: ReactNode;
+  permission?: PermissionsEnum;
+  condition?: (has: (params: { permission: PermissionsEnum } | { role: MemberRoleEnum }) => boolean) => boolean;
+  isDrawerRoute?: boolean;
+}
+
+export const ProtectedRoute = ({ children, permission, condition, isDrawerRoute }: ProtectedRouteProps) => {
+  const { isLoaded } = useAuth();
+
+  if (!isLoaded) {
+    return null;
+  }
+
   return (
     <>
-      <SignedIn>
-        <EnvironmentProvider>{children}</EnvironmentProvider>
-      </SignedIn>
-      <SignedOut>
-        <Navigate to={ROUTES.SIGN_IN} replace />
-      </SignedOut>
+      <Show when="signed-in">
+        <EnvironmentProvider>
+          {permission || condition ? (
+            <PermissionProtectedRoute permission={permission} condition={condition} isDrawerRoute={isDrawerRoute}>
+              {children}
+            </PermissionProtectedRoute>
+          ) : (
+            children
+          )}
+        </EnvironmentProvider>
+      </Show>
+      <Show when="signed-out">
+        <RedirectToSignIn redirectUrl={typeof window !== 'undefined' ? window.location.href : undefined} />
+      </Show>
     </>
   );
 };

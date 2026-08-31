@@ -1,21 +1,20 @@
-import { ChannelTypeEnum, EmailProviderIdEnum } from '@novu/shared';
 import {
   EnvironmentRepository,
   ExecutionDetailsRepository,
   IntegrationEntity,
   IntegrationRepository,
   JobRepository,
+  MessageRepository,
   SubscriberRepository,
   TenantRepository,
-  MessageRepository,
 } from '@novu/dal';
-
-import { SelectIntegration } from './select-integration.usecase';
-import { SelectIntegrationCommand } from './select-integration.command';
-import { ConditionsFilter } from '../conditions-filter';
+import { ChannelTypeEnum, EmailProviderIdEnum } from '@novu/shared';
+import { FeatureFlagsService, TraceLogRepository } from '../../services';
 import { CompileTemplate } from '../compile-template';
-import { ExecutionLogRoute } from '../execution-log-route';
+import { ConditionsFilter } from '../conditions-filter';
 import { CreateExecutionDetails } from '../create-execution-details';
+import { SelectIntegrationCommand } from './select-integration.command';
+import { SelectIntegration } from './select-integration.usecase';
 
 const testIntegration: IntegrationEntity = {
   _environmentId: 'env-test-123',
@@ -85,27 +84,27 @@ jest.mock('../get-decrypted-integrations', () => ({
   })),
 }));
 
-describe('select integration', function () {
+describe('select integration', () => {
   let useCase: SelectIntegration;
   const integrationRepository: IntegrationRepository = new IntegrationRepository();
-  const executionDetailsRepository: ExecutionDetailsRepository = new ExecutionDetailsRepository();
 
   const conditionsFilter = new ConditionsFilter(
     new SubscriberRepository(),
     new MessageRepository(),
-    executionDetailsRepository,
     new JobRepository(),
     new EnvironmentRepository(),
-    new ExecutionLogRoute(new CreateExecutionDetails(new ExecutionDetailsRepository())),
-    new CompileTemplate()
+    new CreateExecutionDetails(new ExecutionDetailsRepository(), TraceLogRepository as any, new FeatureFlagsService()),
+    new CompileTemplate(),
+    new FeatureFlagsService(),
+    { setContext: jest.fn(), info: jest.fn() } as any
   );
-  beforeEach(async function () {
-    // @ts-ignore
+  beforeEach(async () => {
+    // @ts-expect-error
     useCase = new SelectIntegration(integrationRepository, conditionsFilter, new TenantRepository());
     jest.clearAllMocks();
   });
 
-  it('should select the integration', async function () {
+  it('should select the integration', async () => {
     const integration = await useCase.execute(
       SelectIntegrationCommand.create({
         channelType: ChannelTypeEnum.EMAIL,
@@ -120,7 +119,7 @@ describe('select integration', function () {
     expect(integration?.identifier).toEqual(testIntegration.identifier);
   });
 
-  it('should return the novu integration', async function () {
+  it('should return the novu integration', async () => {
     findOneMock.mockImplementationOnce(() => null);
 
     const integration = await useCase.execute(
@@ -180,4 +179,75 @@ describe('select integration', function () {
       );
     }
   );
+
+  it('should scope identifier override query to the current environment', async () => {
+    const environmentId = 'dev-env-id';
+    const organizationId = 'organizationId';
+    const userId = 'userId';
+    const identifier = 'prod-integration-identifier';
+
+    findOneMock.mockImplementationOnce(() => null);
+
+    const integration = await useCase.execute(
+      SelectIntegrationCommand.create({
+        channelType: ChannelTypeEnum.EMAIL,
+        environmentId,
+        organizationId,
+        userId,
+        identifier,
+        filterData: {},
+      })
+    );
+
+    expect(findOneMock).toHaveBeenCalledWith(
+      {
+        _organizationId: organizationId,
+        _environmentId: environmentId,
+        channel: ChannelTypeEnum.EMAIL,
+        identifier,
+        active: true,
+      },
+      undefined,
+      { query: { sort: { createdAt: -1 } } }
+    );
+    expect(integration).toBeUndefined();
+  });
+
+  it('should return integration when identifier belongs to the same environment', async () => {
+    const environmentId = 'dev-env-id';
+    const organizationId = 'organizationId';
+    const userId = 'userId';
+    const identifier = 'dev-integration-identifier';
+
+    findOneMock.mockImplementationOnce(() => ({
+      ...testIntegration,
+      _environmentId: environmentId,
+      identifier,
+    }));
+
+    const integration = await useCase.execute(
+      SelectIntegrationCommand.create({
+        channelType: ChannelTypeEnum.EMAIL,
+        environmentId,
+        organizationId,
+        userId,
+        identifier,
+        filterData: {},
+      })
+    );
+
+    expect(findOneMock).toHaveBeenCalledWith(
+      {
+        _organizationId: organizationId,
+        _environmentId: environmentId,
+        channel: ChannelTypeEnum.EMAIL,
+        identifier,
+        active: true,
+      },
+      undefined,
+      { query: { sort: { createdAt: -1 } } }
+    );
+    expect(integration).not.toBeUndefined();
+    expect(integration?.identifier).toEqual(identifier);
+  });
 });

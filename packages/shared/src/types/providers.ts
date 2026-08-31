@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/naming-convention */
+import { IConfigurations } from '../entities/integration/configuration.interface';
 
 export enum CredentialsKeyEnum {
   ApiKey = 'apiKey',
@@ -28,6 +28,7 @@ export enum CredentialsKeyEnum {
   RedirectUrl = 'redirectUrl',
   Hmac = 'hmac',
   IpPoolName = 'ipPoolName',
+  ConfigurationSetName = 'configurationSetName',
   ApiKeyRequestHeader = 'apiKeyRequestHeader',
   SecretKeyRequestHeader = 'secretKeyRequestHeader',
   IdPath = 'idPath',
@@ -46,10 +47,35 @@ export enum CredentialsKeyEnum {
   externalLink = 'externalLink',
   channelId = 'channelId',
   phoneNumberIdentification = 'phoneNumberIdentification',
+  businessAccountId = 'businessAccountId',
   ApiVersion = 'apiVersion',
+  AppSid = 'appSid',
+  SenderId = 'senderId',
+  AppIOBaseUrl = 'AppIOBaseUrl',
+  ServicePlanId = 'servicePlanId',
+  TenantId = 'tenantId',
+  SigningSecret = 'signingSecret',
+  OutboundIntegrationId = 'outboundIntegrationId',
+  /** Claude Managed Agents: ID of the Anthropic environment tied to this integration. Auto-populated by the API — never entered by the user. */
+  ExternalEnvironmentId = 'externalEnvironmentId',
+  /** Claude Platform on AWS: workspace ID (`wrkspc_…`) required for agent runtime dispatch. */
+  ExternalWorkspaceId = 'externalWorkspaceId',
+  /** HTTP method for custom webhook delivery (e.g. POST, PUT). */
+  Method = 'method',
+  /** Custom webhook request headers as JSON. */
+  Headers = 'headers',
+  /** Custom webhook request body template. */
+  Body = 'body',
+  /** Tool-webhook routing mode: static (integration URL) or dynamic (per-subscriber endpoints). */
+  RoutingMode = 'routingMode',
+  /** Email webhook: how the HMAC secret key value is interpreted when signing webhook calls. */
+  HmacSecretKeyEncoding = 'hmacSecretKeyEncoding',
 }
 
+export type ConfigurationKey = keyof IConfigurations;
+
 export enum EmailProviderIdEnum {
+  Anypost = 'anypost',
   EmailJS = 'emailjs',
   Mailgun = 'mailgun',
   Mailjet = 'mailjet',
@@ -71,6 +97,7 @@ export enum EmailProviderIdEnum {
   SparkPost = 'sparkpost',
   EmailWebhook = 'email-webhook',
   Braze = 'braze',
+  NovuAgent = 'novu-email-agent',
 }
 
 export enum SmsProviderIdEnum {
@@ -105,12 +132,23 @@ export enum SmsProviderIdEnum {
   BrevoSms = 'brevo-sms',
   EazySms = 'eazy-sms',
   Mobishastra = 'mobishastra',
+  AfroSms = 'afro-message',
+  // cspell:disable-next-line
+  Unifonic = 'unifonic',
+  // cspell:disable-next-line
+  Smsmode = 'smsmode',
+  IMedia = 'imedia',
+  Sinch = 'sinch',
+  ISendProSms = 'isendpro-sms',
+  CmTelecom = 'cm-telecom',
+  RuachSms = 'ruach-sms',
 }
 
 export enum ChatProviderIdEnum {
   Slack = 'slack',
   Discord = 'discord',
   MsTeams = 'msteams',
+  WebexMessaging = 'webex-messaging',
   Mattermost = 'mattermost',
   Ryver = 'ryver',
   Zulip = 'zulip',
@@ -118,6 +156,12 @@ export enum ChatProviderIdEnum {
   GetStream = 'getstream',
   RocketChat = 'rocket-chat',
   WhatsAppBusiness = 'whatsapp-business',
+  Line = 'line',
+  ChatWebhook = 'chat-webhook',
+  Novu = 'novu-slack',
+  Telegram = 'telegram',
+  Sendblue = 'sendblue',
+  NovuWebChat = 'novu-web-chat',
 }
 
 export enum PushProviderIdEnum {
@@ -128,10 +172,30 @@ export enum PushProviderIdEnum {
   Pushpad = 'pushpad',
   PushWebhook = 'push-webhook',
   PusherBeams = 'pusher-beams',
+  AppIO = 'appio',
 }
 
 export enum InAppProviderIdEnum {
   Novu = 'novu',
+}
+
+export enum AgentRuntimeProviderIdEnum {
+  Anthropic = 'anthropic',
+  NovuAnthropic = 'novu-anthropic',
+  AnthropicAws = 'anthropic-aws',
+}
+
+export enum ToolProviderIdEnum {
+  PagerDuty = 'pagerduty',
+  Opsgenie = 'opsgenie',
+  Grafana = 'grafana',
+  Webhook = 'tool-webhook',
+}
+
+/** Distinguishes integrations used for notification delivery from those used as agent runtimes. */
+export enum IntegrationKindEnum {
+  DELIVERY = 'delivery',
+  AGENT = 'agent',
 }
 
 export type ProvidersIdEnum =
@@ -139,7 +203,9 @@ export type ProvidersIdEnum =
   | SmsProviderIdEnum
   | PushProviderIdEnum
   | InAppProviderIdEnum
-  | ChatProviderIdEnum;
+  | ChatProviderIdEnum
+  | AgentRuntimeProviderIdEnum
+  | ToolProviderIdEnum;
 
 export const ProvidersIdEnumConst = {
   EmailProviderIdEnum,
@@ -147,4 +213,10 @@ export const ProvidersIdEnumConst = {
   PushProviderIdEnum,
   InAppProviderIdEnum,
   ChatProviderIdEnum,
+  AgentRuntimeProviderIdEnum,
+  ToolProviderIdEnum,
 };
+
+export const providerIdValues = [
+  ...new Set(Object.values(ProvidersIdEnumConst).flatMap((enumObj) => Object.values(enumObj))),
+];

@@ -1,12 +1,12 @@
-import { UserSession } from '@novu/testing';
 import { CacheService, HttpResponseHeaderKeysEnum } from '@novu/application-generic';
+import { UserSession } from '@novu/testing';
 import { expect } from 'chai';
-import { expectSdkExceptionGeneric } from '../helpers/e2e/sdk/e2e-sdk.helper';
 import {
   IdempotenceTestingResponse,
   IdempotencyBehaviorEnum,
   IdempotencyTestingDto,
 } from '../../testing/dtos/idempotency.dto';
+import { expectSdkExceptionGeneric } from '../helpers/e2e/sdk/e2e-sdk.helper';
 
 const DOCS_LINK = 'https://docs.novu.co/additional-resources/idempotency';
 // @ts-ignore
@@ -154,6 +154,8 @@ describe('Idempotency Test', async () => {
       testIdempotencyPost(IDEMPOTENCE_IMMEDIATE_EXCEPTION, key)
     );
     expect(error?.message).to.eq(error2?.message);
+    expect(error?.statusCode).to.eq(error2?.statusCode);
+    expect(error2?.statusCode).to.not.eq(503);
   });
   it('should return 400 when key bigger than allowed limit', async () => {
     const key = Array.from({ length: 256 })

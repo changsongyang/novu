@@ -1,15 +1,20 @@
 import { ChatProviderIdEnum } from '@novu/shared';
-import { ChannelTypeEnum, ISendMessageSuccessResponse, IChatOptions, IChatProvider } from '@novu/stateless';
-import axios from 'axios';
+import {
+  ChannelTypeEnum,
+  ENDPOINT_TYPES,
+  IChatOptions,
+  IChatProvider,
+  ISendMessageSuccessResponse,
+  isChannelDataOfType,
+} from '@novu/stateless';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
+import { safeChatWebhookJsonRequest } from '../../../utils/safe-chat-webhook-request';
 import { WithPassthrough } from '../../../utils/types';
 
 export class ZulipProvider extends BaseProvider implements IChatProvider {
   id = ChatProviderIdEnum.Zulip;
   channelType = ChannelTypeEnum.CHAT as ChannelTypeEnum.CHAT;
   protected casing: CasingEnum = CasingEnum.SNAKE_CASE;
-
-  private axiosInstance = axios.create();
 
   constructor(private config) {
     super();
@@ -19,12 +24,18 @@ export class ZulipProvider extends BaseProvider implements IChatProvider {
     data: IChatOptions,
     bridgeProviderData: WithPassthrough<Record<string, unknown>> = {}
   ): Promise<ISendMessageSuccessResponse> {
-    await this.axiosInstance.post(
-      data.webhookUrl,
-      this.transform(bridgeProviderData, {
+    if (!isChannelDataOfType(data.channelData, ENDPOINT_TYPES.WEBHOOK)) {
+      throw new Error('Invalid channel data for Zulip provider');
+    }
+
+    const { channelData } = data;
+
+    await safeChatWebhookJsonRequest({
+      url: channelData.endpoint.url,
+      body: this.transform(bridgeProviderData, {
         text: data.content,
-      }).body
-    );
+      }).body,
+    });
 
     return {
       date: new Date().toISOString(),

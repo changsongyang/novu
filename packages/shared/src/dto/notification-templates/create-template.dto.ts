@@ -1,5 +1,5 @@
-import { NotificationStepDto } from '../workflows';
 import { CustomDataType } from '../../types';
+import { NotificationStepDto } from '../workflows';
 
 export interface IPreferenceChannelsDto {
   email?: boolean;
@@ -7,6 +7,7 @@ export interface IPreferenceChannelsDto {
   in_app?: boolean;
   chat?: boolean;
   push?: boolean;
+  tool?: boolean;
 }
 
 export interface INotificationGroupDto {

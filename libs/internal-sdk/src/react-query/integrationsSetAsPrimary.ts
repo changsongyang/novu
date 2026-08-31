@@ -11,6 +11,17 @@ import { NovuCore } from "../core.js";
 import { integrationsSetAsPrimary } from "../funcs/integrationsSetAsPrimary.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
@@ -25,18 +36,36 @@ export type IntegrationsSetAsPrimaryMutationVariables = {
 export type IntegrationsSetAsPrimaryMutationData =
   operations.IntegrationsControllerSetIntegrationAsPrimaryResponse;
 
+export type IntegrationsSetAsPrimaryMutationError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
 /**
- * Set integration as primary
+ * Update integration as primary
+ *
+ * @remarks
+ * Update an integration as **primary** by its unique key identifier **integrationId**.
+ *     This API will set the integration as primary for that channel in the current environment.
+ *     Primary integration is used to deliver notification for sms and email channels in the workflow.
+ *     Only integration metadata is returned, credentials field is returned as an empty object.
  */
 export function useIntegrationsSetAsPrimaryMutation(
   options?: MutationHookOptions<
     IntegrationsSetAsPrimaryMutationData,
-    Error,
+    IntegrationsSetAsPrimaryMutationError,
     IntegrationsSetAsPrimaryMutationVariables
   >,
 ): UseMutationResult<
   IntegrationsSetAsPrimaryMutationData,
-  Error,
+  IntegrationsSetAsPrimaryMutationError,
   IntegrationsSetAsPrimaryMutationVariables
 > {
   const client = useNovuContext();

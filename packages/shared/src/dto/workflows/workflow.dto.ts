@@ -1,7 +1,15 @@
-import { StepTypeEnum, WorkflowCreationSourceEnum, WorkflowOriginEnum, WorkflowPreferences } from '../../types';
-import { Slug } from '../../types/utils';
+import {
+  ProvidersIdEnum,
+  ResourceOriginEnum,
+  RuntimeIssue,
+  SeverityLevelEnum,
+  Slug,
+  StepTypeEnum,
+  WorkflowCreationSourceEnum,
+  WorkflowPreferences,
+} from '@novu/shared';
 import type { JSONSchemaDto } from './json-schema-dto';
-import { StepCreateDto, StepResponseDto, StepUpdateDto } from './step.dto';
+import { StepCreateDto, StepListResponseDto, StepResponseDto, StepUpdateDto } from './step.dto';
 import { WorkflowStatusEnum } from './workflow-status-enum';
 
 export class ControlsSchema {
@@ -13,6 +21,9 @@ export type PatchWorkflowDto = {
   name?: string;
   description?: string;
   tags?: string[];
+  payloadSchema?: object;
+  validatePayload?: boolean;
+  isTranslationEnabled?: boolean;
 };
 
 export type ListWorkflowResponse = {
@@ -22,9 +33,42 @@ export type ListWorkflowResponse = {
 
 export type WorkflowListResponseDto = Pick<
   WorkflowResponseDto,
-  'name' | 'tags' | 'updatedAt' | 'createdAt' | '_id' | 'workflowId' | 'slug' | 'status' | 'origin' | 'lastTriggeredAt'
+  | 'name'
+  | 'tags'
+  | 'updatedAt'
+  | 'createdAt'
+  | '_id'
+  | 'workflowId'
+  | 'slug'
+  | 'status'
+  | 'origin'
+  | 'lastTriggeredAt'
+  | 'isTranslationEnabled'
 > & {
   stepTypeOverviews: StepTypeEnum[];
+  steps: StepListResponseDto[];
+};
+
+/**
+ * Per-provider overrides for a workflow-assigned agent.
+ * Today only Novu Email (`novu-email-agent`) uses `replyTo`.
+ */
+export type WorkflowAgentProviderConfig = {
+  /**
+   * Novu-digestible inbound address for this agent (shared inbox or custom-domain
+   * agent route). Used as the outbound email Reply-To so replies route to the agent.
+   */
+  replyTo?: string;
+};
+
+/**
+ * Workflow-level agent assignment and optional per-provider config.
+ * `null` on the parent field clears a previously saved assignment.
+ */
+export type WorkflowAgentConfig = {
+  /** Public agent identifier (slug), not the Mongo `_id`. */
+  identifier: string;
+  providers?: Partial<Record<ProvidersIdEnum, WorkflowAgentProviderConfig>>;
 };
 
 export type WorkflowCommonsFields = {
@@ -32,6 +76,14 @@ export type WorkflowCommonsFields = {
   description?: string;
   tags?: string[];
   active?: boolean;
+  validatePayload?: boolean;
+  isTranslationEnabled?: boolean;
+  severity?: SeverityLevelEnum;
+  /**
+   * Optional agent assignment used to route this workflow through an agent's
+   * connected channels. `null` clears a previously saved assignment.
+   */
+  agent?: WorkflowAgentConfig | null;
 };
 
 export type PreferencesResponseDto = {
@@ -51,18 +103,17 @@ export type WorkflowResponseDto = WorkflowCommonsFields & {
   updatedAt: string;
   createdAt: string;
   steps: StepResponseDto[];
-  origin: WorkflowOriginEnum;
+  origin: ResourceOriginEnum;
   preferences: PreferencesResponseDto;
   status: WorkflowStatusEnum;
-  issues?: Record<WorkflowCreateAndUpdateKeys, RuntimeIssueDto>;
+  issues?: Record<WorkflowCreateAndUpdateKeys, RuntimeIssue>;
   lastTriggeredAt?: string;
+  payloadSchema?: Record<string, any>;
+  payloadExample?: object;
 };
+
 export type WorkflowCreateAndUpdateKeys = keyof CreateWorkflowDto | keyof UpdateWorkflowDto;
-export class RuntimeIssueDto {
-  issueType: WorkflowIssueTypeEnum;
-  variableName?: string;
-  message: string;
-}
+
 export enum WorkflowIssueTypeEnum {
   MISSING_VALUE = 'MISSING_VALUE',
   MAX_LENGTH_ACCESSED = 'MAX_LENGTH_ACCESSED',
@@ -79,6 +130,8 @@ export type CreateWorkflowDto = WorkflowCommonsFields & {
   __source: WorkflowCreationSourceEnum;
 
   preferences?: PreferencesRequestDto;
+
+  payloadSchema?: object;
 };
 
 export type UpdateWorkflowDto = WorkflowCommonsFields & {
@@ -91,7 +144,9 @@ export type UpdateWorkflowDto = WorkflowCommonsFields & {
 
   preferences: PreferencesRequestDto;
 
-  origin: WorkflowOriginEnum;
+  origin?: ResourceOriginEnum;
+
+  payloadSchema?: object;
 };
 
 export type UpsertWorkflowBody = Omit<UpdateWorkflowDto, 'steps'> & {
@@ -101,6 +156,10 @@ export type UpsertWorkflowBody = Omit<UpdateWorkflowDto, 'steps'> & {
 export type UpsertStepBody = StepCreateBody | UpdateStepBody;
 export type StepCreateBody = StepCreateDto;
 export type UpdateStepBody = StepUpdateDto;
+
+export type DuplicateWorkflowDto = Pick<CreateWorkflowDto, 'name' | 'tags' | 'description' | 'isTranslationEnabled'> & {
+  workflowId?: string;
+};
 
 export function isStepCreateBody(step: UpsertStepBody): step is StepCreateDto {
   return step && typeof step === 'object' && !(step as UpdateStepBody)._id;

@@ -1,6 +1,8 @@
-import merge from 'lodash/merge';
-import { PreferencesTypeEnum } from '@novu/shared';
+/** biome-ignore-all lint/complexity/noStaticOnlyClass: needed */
 
+import { PreferencesEntity } from '@novu/dal';
+import { PreferencesTypeEnum, WorkflowPreferences } from '@novu/shared';
+import { toMerged } from 'es-toolkit';
 import { GetPreferencesResponseDto } from '../get-preferences';
 import { MergePreferencesCommand } from './merge-preferences.command';
 
@@ -13,52 +15,83 @@ import { MergePreferencesCommand } from './merge-preferences.command';
  * 3. Subscriber global preferences
  * 4. Subscriber workflow preferences
  *
- * If a workflow has the readOnly flag set to true, the subscriber preferences are ignored.
- *
- * If the workflow does not have the readOnly flag set to true, the subscriber preferences are merged with the workflow preferences.
+ * Subscriber preferences are excluded from the merge calculation when:
+ * - The workflow has the readOnly flag set to true
+ * - The excludeSubscriberPreferences flag is set to true (used for subscription preferences)
  *
  * If the subscriber has no preferences, the workflow preferences are returned.
  */
 export class MergePreferences {
-  public static execute(
-    command: MergePreferencesCommand,
-  ): GetPreferencesResponseDto {
-    const workflowPreferences = [
-      command.workflowResourcePreference,
-      command.workflowUserPreference,
-    ].filter((preference) => preference !== undefined);
+  /**
+   * Ensures that `all.enabled` defaults to `true` if undefined.
+   * Without this, if the `all` object is missing or `enabled` is undefined,
+   * the merge result could incorrectly resolve to `false`, while the intended fallback is `true`.
+   *
+   * Performance note: this method is called for every preference of every workflow during
+   * the subscriber-preferences fetch (`MergePreferences.execute`). The previous
+   * implementation always allocated a shallow clone of `preference` and `preference.preferences`
+   * even when no normalization was needed; under concurrent load this accounted for a
+   * meaningful share of the request's CPU time. We now short-circuit and return the
+   * original reference when the input already satisfies the invariant.
+   */
+  private static ensureDefaultAllEnabled(preference: PreferencesEntity | undefined): PreferencesEntity | undefined {
+    if (!preference?.preferences) {
+      return preference;
+    }
 
-    const subscriberPreferences = [
-      command.subscriberGlobalPreference,
-      command.subscriberWorkflowPreference,
-    ].filter((preference) => preference !== undefined);
+    if (!preference.preferences.all || preference.preferences.all.enabled !== undefined) {
+      return preference;
+    }
 
-    const isWorkflowPreferenceReadonly = workflowPreferences.some(
-      (preference) => preference.preferences.all?.readOnly,
+    return {
+      ...preference,
+      preferences: {
+        ...preference.preferences,
+        all: {
+          ...preference.preferences.all,
+          enabled: true,
+        },
+      },
+    };
+  }
+
+  public static execute(command: MergePreferencesCommand): GetPreferencesResponseDto {
+    const workflowPreferences = [command.workflowResourcePreference, command.workflowUserPreference].filter(
+      (preference) => preference !== undefined
     );
+
+    const subscriberPreferences = [command.subscriberGlobalPreference, command.subscriberWorkflowPreference].filter(
+      (preference) => preference !== undefined
+    );
+
+    const isWorkflowPreferenceReadonly = workflowPreferences.some((preference) => preference.preferences.all?.readOnly);
+    const shouldExcludeSubscriberPreferences = command.excludeSubscriberPreferences || isWorkflowPreferenceReadonly;
 
     const preferencesList = [
       ...workflowPreferences,
-      // If the workflow preference is readOnly, we disregard the subscriber preferences
-      ...(isWorkflowPreferenceReadonly ? [] : subscriberPreferences),
+      ...(shouldExcludeSubscriberPreferences ? [] : subscriberPreferences),
     ];
 
-    const mergedPreferences = merge({}, ...preferencesList);
+    const normalizedPreferencesList = preferencesList.map((preference) =>
+      MergePreferences.ensureDefaultAllEnabled(preference)
+    );
+
+    const mergedPreferences = normalizedPreferencesList.reduce(
+      (acc, preference) => toMerged(acc, preference),
+      {}
+    ) as PreferencesEntity & { preferences: WorkflowPreferences };
 
     // Build the source object
     const source = {
-      [PreferencesTypeEnum.WORKFLOW_RESOURCE]:
-        command.workflowResourcePreference?.preferences || null,
-      [PreferencesTypeEnum.USER_WORKFLOW]:
-        command.workflowUserPreference?.preferences || null,
-      [PreferencesTypeEnum.SUBSCRIBER_GLOBAL]:
-        command.subscriberGlobalPreference?.preferences || null,
-      [PreferencesTypeEnum.SUBSCRIBER_WORKFLOW]:
-        command.subscriberWorkflowPreference?.preferences || null,
+      [PreferencesTypeEnum.WORKFLOW_RESOURCE]: command.workflowResourcePreference?.preferences || null,
+      [PreferencesTypeEnum.USER_WORKFLOW]: command.workflowUserPreference?.preferences || null,
+      [PreferencesTypeEnum.SUBSCRIBER_GLOBAL]: command.subscriberGlobalPreference?.preferences || null,
+      [PreferencesTypeEnum.SUBSCRIBER_WORKFLOW]: command.subscriberWorkflowPreference?.preferences || null,
     };
 
     return {
       preferences: mergedPreferences.preferences,
+      schedule: mergedPreferences.schedule,
       type: mergedPreferences.type,
       source,
     };

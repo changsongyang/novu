@@ -1,59 +1,59 @@
+import { FILTER_TO_LABEL, FieldOperatorEnum, IBaseFieldFilterPart, ICondition } from '@novu/shared';
 import _ from 'lodash';
-import {
-  IBaseFieldFilterPart,
-  FieldOperatorEnum,
-  FILTER_TO_LABEL,
-  ICondition,
-} from '@novu/shared';
 
-import {
-  FilterProcessingDetails,
-  IFilterVariables,
-} from './filter-processing-details';
+import { FilterProcessingDetails, IFilterVariables } from './filter-processing-details';
 
 export abstract class Filter {
   protected processFilterEquality(
     variables: IFilterVariables,
     fieldFilter: IBaseFieldFilterPart,
-    filterProcessingDetails: FilterProcessingDetails,
+    filterProcessingDetails: FilterProcessingDetails
   ): boolean {
-    const actualValue = _.get(
-      variables,
-      `${fieldFilter.on}.${fieldFilter.field}`,
-    );
+    const actualValue = _.get(variables, `${fieldFilter.on}.${fieldFilter.field}`);
     const filterValue = this.parseValue(actualValue, fieldFilter.value);
     let result = false;
 
-    if (fieldFilter.operator === FieldOperatorEnum.EQUAL) {
-      result = actualValue === filterValue;
+    switch (fieldFilter.operator) {
+      case FieldOperatorEnum.EQUAL:
+        result = actualValue === filterValue;
+
+        break;
+      case FieldOperatorEnum.NOT_EQUAL:
+        result = actualValue !== filterValue;
+
+        break;
+      case FieldOperatorEnum.LARGER:
+        result = actualValue > filterValue;
+
+        break;
+      case FieldOperatorEnum.SMALLER:
+        result = actualValue < filterValue;
+
+        break;
+      case FieldOperatorEnum.LARGER_EQUAL:
+        result = actualValue >= filterValue;
+
+        break;
+      case FieldOperatorEnum.SMALLER_EQUAL:
+        result = actualValue <= filterValue;
+
+        break;
+      case FieldOperatorEnum.NOT_IN:
+        result = this.evaluateIncludesMembership(actualValue, filterValue, false);
+
+        break;
+      case FieldOperatorEnum.IN:
+        result = this.evaluateIncludesMembership(actualValue, filterValue, true);
+
+        break;
+      case FieldOperatorEnum.IS_DEFINED:
+        result = actualValue !== undefined;
+
+        break;
+      default:
+        break;
     }
-    if (fieldFilter.operator === FieldOperatorEnum.NOT_EQUAL) {
-      result = actualValue !== filterValue;
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.LARGER) {
-      result = actualValue > filterValue;
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.SMALLER) {
-      result = actualValue < filterValue;
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.LARGER_EQUAL) {
-      result = actualValue >= filterValue;
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.SMALLER_EQUAL) {
-      result = actualValue <= filterValue;
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.NOT_IN) {
-      result = !actualValue.includes(filterValue);
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.IN) {
-      result = actualValue.includes(filterValue);
-    }
-    if (fieldFilter.operator === FieldOperatorEnum.IS_DEFINED) {
-      result = actualValue !== undefined;
-    }
-    const actualValueString: string = Array.isArray(actualValue)
-      ? JSON.stringify(actualValue)
-      : `${actualValue ?? ''}`;
+    const actualValueString: string = Array.isArray(actualValue) ? JSON.stringify(actualValue) : `${actualValue ?? ''}`;
 
     filterProcessingDetails.addCondition({
       filter: FILTER_TO_LABEL[fieldFilter.on],
@@ -74,14 +74,12 @@ export abstract class Filter {
       passedFilters: string[];
     },
     condition: ICondition,
-    type?: string,
+    type?: string
   ) {
     if (!type) {
-      // eslint-disable-next-line no-param-reassign
       type = condition.filter;
     }
 
-    // eslint-disable-next-line no-param-reassign
     type = type?.toLowerCase();
 
     if (condition.passed && !summary.passedFilters.includes(type)) {
@@ -99,6 +97,16 @@ export abstract class Filter {
     return summary;
   }
 
+  private evaluateIncludesMembership(actualValue: unknown, filterValue: unknown, shouldMatch: boolean): boolean {
+    if (Array.isArray(actualValue) || typeof actualValue === 'string') {
+      const includes = actualValue.includes(filterValue as never);
+
+      return shouldMatch ? includes : !includes;
+    }
+
+    return !shouldMatch;
+  }
+
   private parseValue(originValue, parsingValue) {
     switch (typeof originValue) {
       case 'number':
@@ -114,10 +122,7 @@ export abstract class Filter {
     }
   }
 
-  protected async findAsync<T>(
-    array: T[],
-    predicate: (t: T) => Promise<boolean>,
-  ): Promise<T | undefined> {
+  protected async findAsync<T>(array: T[], predicate: (t: T) => Promise<boolean>): Promise<T | undefined> {
     for (const t of array) {
       if (await predicate(t)) {
         return t;
@@ -127,16 +132,11 @@ export abstract class Filter {
     return undefined;
   }
 
-  protected async filterAsync<T>(
-    arr: T[],
-    callback: (item: T) => Promise<boolean>,
-  ): Promise<T[]> {
+  protected async filterAsync<T>(arr: T[], callback: (item: T) => Promise<boolean>): Promise<T[]> {
     const fail = Symbol('Filter Async failure');
 
-    return (
-      await Promise.all(
-        arr.map(async (item) => ((await callback(item)) ? item : fail)),
-      )
-    ).filter((i) => i !== fail) as T[];
+    return (await Promise.all(arr.map(async (item) => ((await callback(item)) ? item : fail)))).filter(
+      (i) => i !== fail
+    ) as T[];
   }
 }

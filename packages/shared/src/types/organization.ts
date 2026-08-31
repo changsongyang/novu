@@ -3,28 +3,14 @@ export type OrganizationId = string;
 export enum ApiServiceLevelEnum {
   FREE = 'free',
   PRO = 'pro',
-  /** @deprecated Use TEAM instead */
   BUSINESS = 'business',
-  TEAM = 'team',
   ENTERPRISE = 'enterprise',
-  /**
-   * @deprecated Use ENTERPRISE instead
-   * TODO: NV-3067 - Remove unlimited tier once all organizations have a service level
-   *
-   */
-  UNLIMITED = 'unlimited', // Redirect to enterprise
+  UNLIMITED = 'unlimited',
 }
 
-export function migrateServiceLevel(level: ApiServiceLevelEnum): ApiServiceLevelEnum {
-  switch (level) {
-    case ApiServiceLevelEnum.UNLIMITED:
-      return ApiServiceLevelEnum.ENTERPRISE;
-    case ApiServiceLevelEnum.BUSINESS:
-      return ApiServiceLevelEnum.TEAM;
-
-    default:
-      return level;
-  }
+export enum StripeBillingIntervalEnum {
+  MONTH = 'month',
+  YEAR = 'year',
 }
 
 export enum ProductUseCasesEnum {
@@ -33,16 +19,43 @@ export enum ProductUseCasesEnum {
   DELAY = 'delay',
   TRANSLATION = 'translation',
   DIGEST = 'digest',
+  AGENTS = 'agents',
 }
 
 export type ProductUseCases = Partial<Record<ProductUseCasesEnum, boolean>>;
 
+export enum IndustryEnum {
+  ECOMMERCE = 'ecommerce',
+  FINTECH = 'fintech',
+  SAAS = 'saas',
+  HEALTHCARE = 'healthcare',
+  EDUCATION = 'education',
+  MEDIA = 'media',
+  MARKETPLACE = 'marketplace',
+  GAMING = 'gaming',
+  TRAVEL = 'travel',
+  REAL_ESTATE = 'real_estate',
+  LOGISTICS = 'logistics',
+  FOOD_AND_BEVERAGE = 'food_and_beverage',
+  INSURANCE = 'insurance',
+  GOVERNMENT = 'government',
+  NON_PROFIT = 'non_profit',
+  TELECOMMUNICATIONS = 'telecommunications',
+  RETAIL = 'retail',
+  AUTOMOTIVE = 'automotive',
+  CONSTRUCTION = 'construction',
+  ENERGY = 'energy',
+  AGRICULTURE = 'agriculture',
+  LEGAL = 'legal',
+  OTHER = 'other',
+}
+
 export type OrganizationPublicMetadata = {
   externalOrgId?: string;
-  apiServiceLevel?: ApiServiceLevelEnum;
   domain?: string;
   productUseCases?: ProductUseCases;
   language?: string[];
   defaultLocale?: string;
   companySize?: string;
+  industry?: IndustryEnum;
 };

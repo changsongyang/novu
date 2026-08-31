@@ -1,8 +1,18 @@
-import { Accessor, createContext, createEffect, createSignal, ParentProps, Setter, useContext } from 'solid-js';
+import {
+  Accessor,
+  createContext,
+  createEffect,
+  createMemo,
+  createSignal,
+  ParentProps,
+  Setter,
+  useContext,
+} from 'solid-js';
 import { NotificationFilter, Redirect } from '../../types';
+import { isValidInAppRedirectTarget, isValidInAppRedirectUrl } from '../../utils/in-app-redirect-url';
 import { DEFAULT_REFERRER, DEFAULT_TARGET, getTagsFromTab } from '../helpers';
 import { useNovuEvent } from '../helpers/useNovuEvent';
-import { NotificationStatus, PreferencesFilter, RouterPush, Tab } from '../types';
+import { NotificationStatus, PreferenceGroups, PreferencesFilter, PreferencesSort, RouterPush, Tab } from '../types';
 
 type InboxContextType = {
   setStatus: (status: NotificationStatus) => void;
@@ -12,20 +22,35 @@ type InboxContextType = {
   setLimit: (tab: number) => void;
   tabs: Accessor<Array<Tab>>;
   preferencesFilter: Accessor<PreferencesFilter | undefined>;
+  preferenceGroups: Accessor<PreferenceGroups | undefined>;
+  preferencesSort: Accessor<PreferencesSort | undefined>;
   activeTab: Accessor<string>;
   setActiveTab: (tab: string) => void;
   isOpened: Accessor<boolean>;
   setIsOpened: Setter<boolean>;
   navigate: (url?: string, target?: Redirect['target']) => void;
   hideBranding: Accessor<boolean>;
+  isDevelopmentMode: Accessor<boolean>;
+  maxSnoozeDurationHours: Accessor<number>;
+  isSnoozeEnabled: Accessor<boolean>;
+  isKeyless: Accessor<boolean>;
+  applicationIdentifier: Accessor<string | null>;
+  contextKeys: Accessor<string[] | undefined>;
 };
 
 const InboxContext = createContext<InboxContextType | undefined>(undefined);
 
+const KEYLESS_APPLICATION_IDENTIFIER_PREFIX = 'pk_keyless_';
+
+function isKeylessApplicationIdentifier(applicationIdentifier: string | null | undefined): boolean {
+  return !!applicationIdentifier?.startsWith(KEYLESS_APPLICATION_IDENTIFIER_PREFIX);
+}
+
 const STATUS_TO_FILTER: Record<NotificationStatus, NotificationFilter> = {
-  [NotificationStatus.UNREAD_READ]: { archived: false },
-  [NotificationStatus.UNREAD]: { read: false },
+  [NotificationStatus.UNREAD_READ]: { archived: false, snoozed: false },
+  [NotificationStatus.UNREAD]: { read: false, snoozed: false },
   [NotificationStatus.ARCHIVED]: { archived: true },
+  [NotificationStatus.SNOOZED]: { snoozed: true },
 };
 
 export const DEFAULT_LIMIT = 10;
@@ -33,27 +58,40 @@ export const DEFAULT_LIMIT = 10;
 type InboxProviderProps = ParentProps<{
   tabs: Array<Tab>;
   preferencesFilter?: PreferencesFilter;
+  preferenceGroups?: PreferenceGroups;
+  preferencesSort?: PreferencesSort;
   routerPush?: RouterPush;
+  applicationIdentifier?: string;
 }>;
 
 export const InboxProvider = (props: InboxProviderProps) => {
   const [isOpened, setIsOpened] = createSignal<boolean>(false);
   const [tabs, setTabs] = createSignal<Array<Tab>>(props.tabs);
-  const [activeTab, setActiveTab] = createSignal<string>((props.tabs[0] && props.tabs[0].label) ?? '');
+  const [activeTab, setActiveTab] = createSignal<string>(props.tabs[0]?.label ?? '');
   const [status, setStatus] = createSignal<NotificationStatus>(NotificationStatus.UNREAD_READ);
   const [limit, setLimit] = createSignal<number>(DEFAULT_LIMIT);
   const [filter, setFilter] = createSignal<NotificationFilter>({
     ...STATUS_TO_FILTER[NotificationStatus.UNREAD_READ],
     tags: props.tabs.length > 0 ? getTagsFromTab(props.tabs[0]) : [],
+    data: props.tabs.length > 0 ? props.tabs[0].filter?.data : {},
+    severity: props.tabs.length > 0 ? props.tabs[0].filter?.severity : undefined,
   });
   const [hideBranding, setHideBranding] = createSignal(false);
+  const [isDevelopmentMode, setIsDevelopmentMode] = createSignal(false);
+  const [maxSnoozeDurationHours, setMaxSnoozeDurationHours] = createSignal(0);
+  const isSnoozeEnabled = createMemo(() => maxSnoozeDurationHours() > 0);
   const [preferencesFilter, setPreferencesFilter] = createSignal<PreferencesFilter | undefined>(
     props.preferencesFilter
   );
+  const [isKeyless, setIsKeyless] = createSignal(false);
+  const [applicationIdentifier, setApplicationIdentifier] = createSignal<string | null>(null);
+  const [contextKeys, setContextKeys] = createSignal<string[] | undefined>(undefined);
+  const [preferenceGroups, setPreferenceGroups] = createSignal<PreferenceGroups | undefined>(props.preferenceGroups);
+  const [preferencesSort, setPreferencesSort] = createSignal<PreferencesSort | undefined>(props.preferencesSort);
 
   const setNewStatus = (newStatus: NotificationStatus) => {
     setStatus(newStatus);
-    setFilter((old) => ({ ...STATUS_TO_FILTER[newStatus], tags: old.tags }));
+    setFilter((old) => ({ ...STATUS_TO_FILTER[newStatus], tags: old.tags, data: old.data, severity: old.severity }));
   };
 
   const setNewActiveTab = (newActiveTab: string) => {
@@ -64,17 +102,18 @@ export const InboxProvider = (props: InboxProviderProps) => {
     }
 
     setActiveTab(newActiveTab);
-    setFilter((old) => ({ ...old, tags }));
+    setFilter((old) => ({ ...old, tags, data: tab?.filter?.data, severity: tab?.filter?.severity }));
   };
 
   const navigate = (url?: string, target?: Redirect['target']) => {
-    if (!url) {
+    if (!url || !isValidInAppRedirectUrl(url)) {
       return;
     }
 
     const isAbsoluteUrl = !url.startsWith('/');
     if (isAbsoluteUrl) {
-      window.open(url, target ?? DEFAULT_TARGET, DEFAULT_REFERRER);
+      const safeTarget = isValidInAppRedirectTarget(target) ? target : DEFAULT_TARGET;
+      window.open(url, safeTarget, DEFAULT_REFERRER);
 
       return;
     }
@@ -95,8 +134,10 @@ export const InboxProvider = (props: InboxProviderProps) => {
     const firstTab = props.tabs[0];
     const tags = getTagsFromTab(firstTab);
     setActiveTab(firstTab?.label ?? '');
-    setFilter((old) => ({ ...old, tags }));
+    setFilter((old) => ({ ...old, tags, data: firstTab?.filter?.data, severity: firstTab?.filter?.severity }));
+
     setPreferencesFilter(props.preferencesFilter);
+    setPreferenceGroups(props.preferenceGroups);
   });
 
   useNovuEvent({
@@ -105,8 +146,24 @@ export const InboxProvider = (props: InboxProviderProps) => {
       if (!data) {
         return;
       }
+      const storedKeylessIdentifier = window.localStorage.getItem('novu_keyless_application_identifier');
 
       setHideBranding(data.removeNovuBranding);
+      setIsDevelopmentMode(data.isDevelopmentMode);
+      setMaxSnoozeDurationHours(data.maxSnoozeDurationHours);
+      setContextKeys(data.contextKeys);
+
+      if (!props.applicationIdentifier) {
+        const keylessActive =
+          isKeylessApplicationIdentifier(data.applicationIdentifier) ||
+          isKeylessApplicationIdentifier(storedKeylessIdentifier);
+
+        setIsKeyless(keylessActive);
+        setApplicationIdentifier(data.applicationIdentifier ?? null);
+      } else {
+        setIsKeyless(false);
+        setApplicationIdentifier(props.applicationIdentifier);
+      }
     },
   });
 
@@ -126,6 +183,14 @@ export const InboxProvider = (props: InboxProviderProps) => {
         navigate,
         hideBranding,
         preferencesFilter,
+        preferenceGroups,
+        preferencesSort,
+        isDevelopmentMode,
+        maxSnoozeDurationHours,
+        isSnoozeEnabled,
+        isKeyless,
+        applicationIdentifier,
+        contextKeys,
       }}
     >
       {props.children}

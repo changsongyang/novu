@@ -1,4 +1,14 @@
+export function isWebLocksSupported(): boolean {
+  return typeof navigator !== 'undefined' && 'locks' in navigator && !!navigator.locks;
+}
+
 export function requestLock(id: string, cb: (id: string) => void) {
+  if (!isWebLocksSupported()) {
+    cb(id);
+
+    return () => {};
+  }
+
   let isFulfilled = false;
   let promiseResolve: () => void;
 

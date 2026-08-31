@@ -1,4 +1,5 @@
 import type { ISubscriberPayload, ITriggerPayload, TriggerEventStatusEnum, TriggerRecipientsPayload } from '../shared';
+import { ContextPayload } from './context.types';
 import { ConditionalPartial, PickRequiredKeys } from './util.types';
 
 type EventPayload = ITriggerPayload;
@@ -32,6 +33,10 @@ export type EventTriggerParams<T_Payload = EventPayload> = {
    */
   actor?: Actor;
   /**
+   * Context to trigger the workflow with
+   */
+  context?: ContextPayload;
+  /**
    * Bridge url to trigger the workflow to
    */
   bridgeUrl?: string;
@@ -43,6 +48,11 @@ export type EventTriggerParams<T_Payload = EventPayload> = {
    * Overrides for trigger
    */
   overrides?: Record<string, unknown>;
+  /**
+   * Override the workflow-assigned agent for this trigger using the public agent identifier.
+   * Omit to use the workflow default; pass null to disable agent routing for this execution.
+   */
+  agentId?: string | null;
   /**
    * Controls for the step execution
    */

@@ -1,15 +1,15 @@
 import { EmailProviderIdEnum } from '@novu/shared';
 import {
   ChannelTypeEnum,
+  CheckIntegrationResponseEnum,
+  EmailEventStatusEnum,
+  ICheckIntegrationResponse,
+  IEmailEventBody,
   IEmailOptions,
   IEmailProvider,
   ISendMessageSuccessResponse,
-  ICheckIntegrationResponse,
-  CheckIntegrationResponseEnum,
-  IEmailEventBody,
-  EmailEventStatusEnum,
 } from '@novu/stateless';
-import { Errors, ServerClient, Message, Models } from 'postmark';
+import { Errors, Message, Models, ServerClient } from 'postmark';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
 import { WithPassthrough } from '../../../utils/types';
 
@@ -81,12 +81,17 @@ export class PostmarkEmailProvider extends BaseProvider implements IEmailProvide
       Cc: getFormattedTo(options.cc),
       Bcc: getFormattedTo(options.bcc),
       Attachments: options.attachments?.map(
-        (attachment) => new Models.Attachment(attachment.name, attachment.file.toString('base64'), attachment.mime)
+        (attachment) =>
+          new Models.Attachment(attachment.name, attachment.file.toString('base64'), attachment.mime, attachment.cid)
       ),
     };
 
     if (options.replyTo) {
       mailData.ReplyTo = options.replyTo;
+    }
+
+    if (options.headers && Object.keys(options.headers).length > 0) {
+      mailData.Headers = Object.entries(options.headers).map(([Name, Value]) => ({ Name, Value }));
     }
 
     return mailData;
@@ -102,7 +107,6 @@ export class PostmarkEmailProvider extends BaseProvider implements IEmailProvide
 
   parseEventBody(body: any | any[], identifier: string): IEmailEventBody | undefined {
     if (Array.isArray(body)) {
-      // eslint-disable-next-line no-param-reassign
       body = body.find((item) => item.MessageID === identifier);
     }
 

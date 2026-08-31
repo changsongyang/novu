@@ -1,6 +1,6 @@
 import { describe, expectTypeOf } from 'vitest';
-import { workflow } from '.';
 import { Subscriber } from '../../types';
+import { workflow } from '.';
 
 describe('workflow function types', () => {
   describe('event types', () => {
@@ -18,6 +18,7 @@ describe('workflow function types', () => {
           push: unknown;
           chat: unknown;
           inApp: unknown;
+          tool: unknown;
           digest: unknown;
           delay: unknown;
           custom: unknown;

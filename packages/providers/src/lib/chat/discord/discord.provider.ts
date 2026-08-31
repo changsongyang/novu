@@ -1,14 +1,20 @@
 import { ChatProviderIdEnum } from '@novu/shared';
-import { ChannelTypeEnum, IChatOptions, IChatProvider, ISendMessageSuccessResponse } from '@novu/stateless';
-import axios from 'axios';
+import {
+  ChannelTypeEnum,
+  ENDPOINT_TYPES,
+  IChatOptions,
+  IChatProvider,
+  ISendMessageSuccessResponse,
+  isChannelDataOfType,
+} from '@novu/stateless';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
+import { resolveSafeChatWebhookUrl, safeChatWebhookJsonRequest } from '../../../utils/safe-chat-webhook-request';
 import { WithPassthrough } from '../../../utils/types';
 
 export class DiscordProvider extends BaseProvider implements IChatProvider {
   protected casing = CasingEnum.CAMEL_CASE;
   channelType = ChannelTypeEnum.CHAT as ChannelTypeEnum.CHAT;
   public id = ChatProviderIdEnum.Discord;
-  private axiosInstance = axios.create();
 
   constructor(private config) {
     super();
@@ -19,19 +25,26 @@ export class DiscordProvider extends BaseProvider implements IChatProvider {
     bridgeProviderData: WithPassthrough<Record<string, unknown>> = {}
   ): Promise<ISendMessageSuccessResponse> {
     // Setting the wait parameter with the URL API to respect user parameters
-    const url = new URL(data.webhookUrl);
+    if (!isChannelDataOfType(data.channelData, ENDPOINT_TYPES.WEBHOOK)) {
+      throw new Error('Invalid channel data for Discord provider');
+    }
+
+    const { endpoint } = data.channelData;
+
+    const url = new URL(resolveSafeChatWebhookUrl(endpoint.url));
     url.searchParams.set('wait', 'true');
-    const response = await this.axiosInstance.post(
-      url.toString(),
-      this.transform(bridgeProviderData, {
+
+    const response = await safeChatWebhookJsonRequest<{ id: string; timestamp: string }>({
+      url: url.toString(),
+      body: this.transform(bridgeProviderData, {
         content: data.content,
         ...(data.customData || {}),
-      }).body
-    );
+      }).body,
+    });
 
     return {
-      id: response.data.id,
-      date: response.data.timestamp,
+      id: response.body.id,
+      date: response.body.timestamp,
     };
   }
 }

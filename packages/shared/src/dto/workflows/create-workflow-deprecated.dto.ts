@@ -1,5 +1,5 @@
-import { NotificationStepDto } from './workflow-deprecated.dto';
 import { CustomDataType } from '../../types';
+import { NotificationStepDto } from './workflow-deprecated.dto';
 
 interface IPreferenceChannelsDto {
   email?: boolean;
@@ -7,6 +7,7 @@ interface IPreferenceChannelsDto {
   in_app?: boolean;
   chat?: boolean;
   push?: boolean;
+  tool?: boolean;
 }
 
 /**

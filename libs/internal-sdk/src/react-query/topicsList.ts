@@ -5,38 +5,66 @@
 import {
   InvalidateQueryFilters,
   QueryClient,
-  QueryFunctionContext,
-  QueryKey,
   useQuery,
   UseQueryResult,
   useSuspenseQuery,
   UseSuspenseQueryResult,
 } from "@tanstack/react-query";
-import { NovuCore } from "../core.js";
-import { topicsList } from "../funcs/topicsList.js";
-import { combineSignals } from "../lib/primitives.js";
-import { RequestOptions } from "../lib/sdks.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
-import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
 import {
   QueryHookOptions,
   SuspenseQueryHookOptions,
   TupleToPrefixes,
 } from "./_types.js";
+import {
+  buildTopicsListQuery,
+  prefetchTopicsList,
+  queryKeyTopicsList,
+  TopicsListQueryData,
+} from "./topicsList.core.js";
+export {
+  buildTopicsListQuery,
+  prefetchTopicsList,
+  queryKeyTopicsList,
+  type TopicsListQueryData,
+};
 
-export type TopicsListQueryData = operations.TopicsControllerListTopicsResponse;
+export type TopicsListQueryError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
 
 /**
- * Get topic list filtered
+ * List all topics
  *
  * @remarks
- * Returns a list of topics that can be paginated using the `page` query parameter and filtered by the topic key with the `key` query parameter
+ * This api returns a paginated list of topics.
+ *     Topics can be filtered by **key**, **name**, or **includeCursor** to paginate through the list.
+ *     Checkout all available filters in the query section.
  */
 export function useTopicsList(
   request: operations.TopicsControllerListTopicsRequest,
-  options?: QueryHookOptions<TopicsListQueryData>,
-): UseQueryResult<TopicsListQueryData, Error> {
+  options?: QueryHookOptions<TopicsListQueryData, TopicsListQueryError>,
+): UseQueryResult<TopicsListQueryData, TopicsListQueryError> {
   const client = useNovuContext();
   return useQuery({
     ...buildTopicsListQuery(
@@ -49,15 +77,17 @@ export function useTopicsList(
 }
 
 /**
- * Get topic list filtered
+ * List all topics
  *
  * @remarks
- * Returns a list of topics that can be paginated using the `page` query parameter and filtered by the topic key with the `key` query parameter
+ * This api returns a paginated list of topics.
+ *     Topics can be filtered by **key**, **name**, or **includeCursor** to paginate through the list.
+ *     Checkout all available filters in the query section.
  */
 export function useTopicsListSuspense(
   request: operations.TopicsControllerListTopicsRequest,
-  options?: SuspenseQueryHookOptions<TopicsListQueryData>,
-): UseSuspenseQueryResult<TopicsListQueryData, Error> {
+  options?: SuspenseQueryHookOptions<TopicsListQueryData, TopicsListQueryError>,
+): UseSuspenseQueryResult<TopicsListQueryData, TopicsListQueryError> {
   const client = useNovuContext();
   return useSuspenseQuery({
     ...buildTopicsListQuery(
@@ -69,26 +99,20 @@ export function useTopicsListSuspense(
   });
 }
 
-export function prefetchTopicsList(
-  queryClient: QueryClient,
-  client$: NovuCore,
-  request: operations.TopicsControllerListTopicsRequest,
-): Promise<void> {
-  return queryClient.prefetchQuery({
-    ...buildTopicsListQuery(
-      client$,
-      request,
-    ),
-  });
-}
-
 export function setTopicsListData(
   client: QueryClient,
   queryKeyBase: [
     parameters: {
-      page?: number | undefined;
-      pageSize?: number | undefined;
+      after?: string | undefined;
+      before?: string | undefined;
+      limit?: number | undefined;
+      orderDirection?:
+        | operations.TopicsControllerListTopicsQueryParamOrderDirection
+        | undefined;
+      orderBy?: string | undefined;
+      includeCursor?: boolean | undefined;
       key?: string | undefined;
+      name?: string | undefined;
       idempotencyKey?: string | undefined;
     },
   ],
@@ -103,9 +127,16 @@ export function invalidateTopicsList(
   client: QueryClient,
   queryKeyBase: TupleToPrefixes<
     [parameters: {
-      page?: number | undefined;
-      pageSize?: number | undefined;
+      after?: string | undefined;
+      before?: string | undefined;
+      limit?: number | undefined;
+      orderDirection?:
+        | operations.TopicsControllerListTopicsQueryParamOrderDirection
+        | undefined;
+      orderBy?: string | undefined;
+      includeCursor?: boolean | undefined;
       key?: string | undefined;
+      name?: string | undefined;
       idempotencyKey?: string | undefined;
     }]
   >,
@@ -125,48 +156,4 @@ export function invalidateAllTopicsList(
     ...filters,
     queryKey: ["@novu/api", "Topics", "list"],
   });
-}
-
-export function buildTopicsListQuery(
-  client$: NovuCore,
-  request: operations.TopicsControllerListTopicsRequest,
-  options?: RequestOptions,
-): {
-  queryKey: QueryKey;
-  queryFn: (context: QueryFunctionContext) => Promise<TopicsListQueryData>;
-} {
-  return {
-    queryKey: queryKeyTopicsList({
-      page: request.page,
-      pageSize: request.pageSize,
-      key: request.key,
-      idempotencyKey: request.idempotencyKey,
-    }),
-    queryFn: async function topicsListQueryFn(
-      ctx,
-    ): Promise<TopicsListQueryData> {
-      const sig = combineSignals(ctx.signal, options?.fetchOptions?.signal);
-      const mergedOptions = {
-        ...options,
-        fetchOptions: { ...options?.fetchOptions, signal: sig },
-      };
-
-      return unwrapAsync(topicsList(
-        client$,
-        request,
-        mergedOptions,
-      ));
-    },
-  };
-}
-
-export function queryKeyTopicsList(
-  parameters: {
-    page?: number | undefined;
-    pageSize?: number | undefined;
-    key?: string | undefined;
-    idempotencyKey?: string | undefined;
-  },
-): QueryKey {
-  return ["@novu/api", "Topics", "list", parameters];
 }

@@ -11,12 +11,25 @@ import { NovuCore } from "../core.js";
 import { workflowsCreate } from "../funcs/workflowsCreate.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
+import * as components from "../models/components/index.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
 import { MutationHookOptions } from "./_types.js";
 
 export type WorkflowsCreateMutationVariables = {
+  createWorkflowDto: components.CreateWorkflowDto;
   idempotencyKey?: string | undefined;
   options?: RequestOptions;
 };
@@ -24,15 +37,33 @@ export type WorkflowsCreateMutationVariables = {
 export type WorkflowsCreateMutationData =
   operations.WorkflowControllerCreateResponse;
 
+export type WorkflowsCreateMutationError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
+/**
+ * Create a workflow
+ *
+ * @remarks
+ * Creates a new workflow in the Novu Cloud environment
+ */
 export function useWorkflowsCreateMutation(
   options?: MutationHookOptions<
     WorkflowsCreateMutationData,
-    Error,
+    WorkflowsCreateMutationError,
     WorkflowsCreateMutationVariables
   >,
 ): UseMutationResult<
   WorkflowsCreateMutationData,
-  Error,
+  WorkflowsCreateMutationError,
   WorkflowsCreateMutationVariables
 > {
   const client = useNovuContext();
@@ -58,6 +89,7 @@ export function buildWorkflowsCreateMutation(
   return {
     mutationKey: mutationKeyWorkflowsCreate(),
     mutationFn: function workflowsCreateMutationFn({
+      createWorkflowDto,
       idempotencyKey,
       options,
     }): Promise<WorkflowsCreateMutationData> {
@@ -75,6 +107,7 @@ export function buildWorkflowsCreateMutation(
       };
       return unwrapAsync(workflowsCreate(
         client$,
+        createWorkflowDto,
         idempotencyKey,
         mergedOptions,
       ));

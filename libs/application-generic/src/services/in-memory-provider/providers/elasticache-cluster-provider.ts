@@ -1,6 +1,6 @@
+import { Logger } from '@nestjs/common';
 import Redis, { Cluster, ClusterNode, ClusterOptions, NodeRole } from 'ioredis';
 import { ConnectionOptions } from 'tls';
-import { Logger } from '@nestjs/common';
 
 import { convertStringValues } from './variable-mappers';
 
@@ -86,16 +86,21 @@ export const getElasticacheClusterProviderConfig = (): IElasticacheClusterProvid
 export const getElasticacheCluster = (enableAutoPipelining?: boolean): Cluster | undefined => {
   const { instances, password, tls } = getElasticacheClusterProviderConfig();
 
+  const skipVersionCheck = process.env.REDIS_SKIP_VERSION_CHECK === 'true';
+
+  const redisOptions = {
+    tls,
+    ...(password && { password }),
+    connectTimeout: 10000,
+    skipVersionCheck,
+  };
+
   const options: ClusterOptions = {
     dnsLookup: (address, callback) => callback(null, address),
     enableAutoPipelining: enableAutoPipelining ?? false,
     enableOfflineQueue: false,
     enableReadyCheck: true,
-    redisOptions: {
-      tls,
-      ...(password && { password }),
-      connectTimeout: 10000,
-    },
+    redisOptions,
     scaleReads: 'slave',
     /*
      *  Disabled in Prod as affects performance

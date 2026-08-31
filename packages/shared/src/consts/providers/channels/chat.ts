@@ -1,30 +1,44 @@
-import { IConfigCredentials, IProviderConfig } from '../provider.interface';
+import { ChannelTypeEnum, ChatProviderIdEnum, ToolProviderIdEnum } from '../../../types';
+import { UTM_CAMPAIGN_QUERY_PARAM } from '../../../ui';
 import {
-  grafanaOnCallConfig,
-  slackConfig,
+  chatWebhookConfig,
   getstreamConfig,
+  grafanaOnCallConfig,
+  lineConfig,
+  msTeamsConfig,
+  novuWebChatConfig,
   rocketChatConfig,
+  sendblueConfig,
+  slackConfigLegacy,
+  telegramConfig,
+  webexMessagingConfig,
   whatsAppBusinessConfig,
 } from '../credentials';
-
-import { ChannelTypeEnum, ChatProviderIdEnum } from '../../../types';
-import { UTM_CAMPAIGN_QUERY_PARAM } from '../../../ui';
+import { IConfigCredential, IProviderConfig } from '../provider.interface';
 
 export const chatProviders: IProviderConfig[] = [
+  {
+    id: ChatProviderIdEnum.Novu,
+    displayName: 'Novu Slack',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: [] as IConfigCredential[],
+    docReference: `https://docs.novu.co/platform/integrations/chat/slack${UTM_CAMPAIGN_QUERY_PARAM}`,
+    logoFileName: { light: 'slack.svg', dark: 'slack.svg' },
+  },
   {
     id: ChatProviderIdEnum.Slack,
     displayName: 'Slack',
     channel: ChannelTypeEnum.CHAT,
-    credentials: slackConfig,
-    docReference: `https://docs.novu.co/channels-and-providers/chat/slack${UTM_CAMPAIGN_QUERY_PARAM}`,
+    credentials: slackConfigLegacy,
+    docReference: `https://docs.novu.co/platform/integrations/chat/slack${UTM_CAMPAIGN_QUERY_PARAM}`,
     logoFileName: { light: 'slack.svg', dark: 'slack.svg' },
   },
   {
     id: ChatProviderIdEnum.Discord,
     displayName: 'Discord',
     channel: ChannelTypeEnum.CHAT,
-    credentials: [] as IConfigCredentials[],
-    docReference: `https://docs.novu.co/channels-and-providers/chat/discord${UTM_CAMPAIGN_QUERY_PARAM}`,
+    credentials: [] as IConfigCredential[],
+    docReference: `https://docs.novu.co/platform/integrations/chat/discord${UTM_CAMPAIGN_QUERY_PARAM}`,
     logoFileName: { light: 'discord.svg', dark: 'discord.svg' },
   },
   {
@@ -34,20 +48,33 @@ export const chatProviders: IProviderConfig[] = [
     credentials: grafanaOnCallConfig,
     docReference: 'https://grafana.com/docs/oncall/latest/integrations/webhook/',
     logoFileName: { light: 'grafana-on-call.png', dark: 'grafana-on-call.png' },
+    deprecated: {
+      replacedBy: ToolProviderIdEnum.Grafana,
+      reason:
+        "Use the Grafana integration on the Tool channel instead — it delivers alerts to each subscriber's own Grafana IRM/OnCall stack and supports alert grouping and auto-resolve.",
+    },
   },
   {
     id: ChatProviderIdEnum.MsTeams,
     displayName: 'MSTeams',
     channel: ChannelTypeEnum.CHAT,
-    credentials: [] as IConfigCredentials[],
-    docReference: `https://docs.novu.co/channels-and-providers/chat/ms-teams${UTM_CAMPAIGN_QUERY_PARAM}`,
+    credentials: msTeamsConfig,
+    docReference: `https://docs.novu.co/platform/integrations/chat/ms-teams${UTM_CAMPAIGN_QUERY_PARAM}`,
     logoFileName: { light: 'msteams.svg', dark: 'msteams.svg' },
+  },
+  {
+    id: ChatProviderIdEnum.WebexMessaging,
+    displayName: 'Webex Messaging',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: webexMessagingConfig,
+    docReference: `https://docs.novu.co/platform/integrations/chat/webex-messaging${UTM_CAMPAIGN_QUERY_PARAM}`,
+    logoFileName: { light: 'webex-messaging.svg', dark: 'webex-messaging.svg' },
   },
   {
     id: ChatProviderIdEnum.Mattermost,
     displayName: 'Mattermost',
     channel: ChannelTypeEnum.CHAT,
-    credentials: [] as IConfigCredentials[],
+    credentials: [] as IConfigCredential[],
     docReference: 'https://developers.mattermost.com/integrate/webhooks/incoming/',
     logoFileName: { light: 'mattermost.svg', dark: 'mattermost.svg' },
   },
@@ -55,7 +82,7 @@ export const chatProviders: IProviderConfig[] = [
     id: ChatProviderIdEnum.Ryver,
     displayName: 'Ryver',
     channel: ChannelTypeEnum.CHAT,
-    credentials: [] as IConfigCredentials[],
+    credentials: [] as IConfigCredential[],
     docReference: 'https://api.ryver.com/ryvrest_api_examples.html#create-chat-message',
     logoFileName: { light: 'ryver.png', dark: 'ryver.png' },
   },
@@ -63,8 +90,8 @@ export const chatProviders: IProviderConfig[] = [
     id: ChatProviderIdEnum.Zulip,
     displayName: 'Zulip',
     channel: ChannelTypeEnum.CHAT,
-    credentials: [] as IConfigCredentials[],
-    docReference: `https://docs.novu.co/channels-and-providers/chat/zulip${UTM_CAMPAIGN_QUERY_PARAM}`,
+    credentials: [] as IConfigCredential[],
+    docReference: `https://docs.novu.co/platform/integrations/chat/zulip${UTM_CAMPAIGN_QUERY_PARAM}`,
     logoFileName: { light: 'zulip.svg', dark: 'zulip.svg' },
   },
   {
@@ -88,7 +115,48 @@ export const chatProviders: IProviderConfig[] = [
     displayName: 'WhatsApp Business',
     channel: ChannelTypeEnum.CHAT,
     credentials: whatsAppBusinessConfig,
-    docReference: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+    docReference: `https://docs.novu.co/platform/integrations/chat/whats-app${UTM_CAMPAIGN_QUERY_PARAM}`,
     logoFileName: { light: 'whatsapp-business.svg', dark: 'whatsapp-business.svg' },
+  },
+  {
+    id: ChatProviderIdEnum.Line,
+    displayName: 'LINE',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: lineConfig,
+    docReference: 'https://docs.novu.co/platform/integrations/chat/line',
+    logoFileName: { light: 'line.svg', dark: 'line.svg' },
+  },
+  {
+    id: ChatProviderIdEnum.ChatWebhook,
+    displayName: 'Chat Webhook',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: chatWebhookConfig,
+    docReference: `https://docs.novu.co/channels-and-providers/chat/chat-webhook${UTM_CAMPAIGN_QUERY_PARAM}`,
+    logoFileName: { light: 'webhook.svg', dark: 'webhook.svg' },
+    betaVersion: true,
+  },
+  {
+    id: ChatProviderIdEnum.Telegram,
+    displayName: 'Telegram',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: telegramConfig,
+    docReference: `https://docs.novu.co/platform/integrations/chat/telegram${UTM_CAMPAIGN_QUERY_PARAM}`,
+    logoFileName: { light: 'telegram.svg', dark: 'telegram.svg' },
+  },
+  {
+    id: ChatProviderIdEnum.Sendblue,
+    displayName: 'Sendblue',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: sendblueConfig,
+    docReference: 'https://docs.sendblue.com',
+    logoFileName: { light: 'sendblue.svg', dark: 'sendblue.svg' },
+  },
+  {
+    id: ChatProviderIdEnum.NovuWebChat,
+    displayName: 'Novu Web Chat',
+    channel: ChannelTypeEnum.CHAT,
+    credentials: novuWebChatConfig,
+    docReference: `https://docs.novu.co/agents/channels/web-chat${UTM_CAMPAIGN_QUERY_PARAM}`,
+    logoFileName: { light: 'novu-web-chat.svg', dark: 'novu-web-chat.svg' },
   },
 ];

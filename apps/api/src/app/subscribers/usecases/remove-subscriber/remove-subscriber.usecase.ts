@@ -1,11 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { SubscriberRepository, TopicSubscribersRepository, PreferencesRepository } from '@novu/dal';
 import {
-  buildSubscriberKey,
   buildFeedKey,
   buildMessageCountKey,
+  buildSubscriberKey,
   InvalidateCacheService,
 } from '@novu/application-generic';
+import {
+  ChannelConnectionRepository,
+  ChannelEndpointRepository,
+  PreferencesRepository,
+  SubscriberRepository,
+  TopicSubscribersRepository,
+} from '@novu/dal';
 
 import { RemoveSubscriberCommand } from './remove-subscriber.command';
 
@@ -15,19 +21,15 @@ export class RemoveSubscriber {
     private invalidateCache: InvalidateCacheService,
     private subscriberRepository: SubscriberRepository,
     private topicSubscribersRepository: TopicSubscribersRepository,
-    private preferenceRepository: PreferencesRepository
+    private preferenceRepository: PreferencesRepository,
+    private channelEndpointRepository: ChannelEndpointRepository,
+    private channelConnectionRepository: ChannelConnectionRepository
   ) {}
 
   async execute({ environmentId: _environmentId, subscriberId }: RemoveSubscriberCommand) {
     await Promise.all([
       this.invalidateCache.invalidateByKey({
         key: buildSubscriberKey({
-          subscriberId,
-          _environmentId,
-        }),
-      }),
-      this.invalidateCache.invalidateQuery({
-        key: buildFeedKey().invalidate({
           subscriberId,
           _environmentId,
         }),
@@ -49,7 +51,7 @@ export class RemoveSubscriber {
       throw new NotFoundException({ message: 'Subscriber was not found', externalSubscriberId: subscriberId });
     }
 
-    await this.subscriberRepository.withTransaction(async () => {
+    await this.subscriberRepository.withTransaction(async (session) => {
       /*
        * Note about parallelism in transactions
        *
@@ -59,19 +61,44 @@ export class RemoveSubscriber {
        *
        * Refer to https://mongoosejs.com/docs/transactions.html#note-about-parallelism-in-transactions
        */
-      await this.subscriberRepository.delete({
-        subscriberId,
-        _environmentId,
-      });
+      await this.subscriberRepository.delete(
+        {
+          subscriberId,
+          _environmentId,
+        },
+        { session }
+      );
 
-      await this.topicSubscribersRepository.delete({
-        _environmentId,
-        externalSubscriberId: subscriberId,
-      });
-      await this.preferenceRepository.delete({
-        _environmentId,
-        _subscriberId: { $in: subscriberInternalIds },
-      });
+      await this.topicSubscribersRepository.delete(
+        {
+          _environmentId,
+          externalSubscriberId: subscriberId,
+        },
+        { session }
+      );
+      await this.preferenceRepository.delete(
+        {
+          _environmentId,
+          _subscriberId: { $in: subscriberInternalIds },
+        },
+        { session }
+      );
+
+      await this.channelEndpointRepository.delete(
+        {
+          subscriberId,
+          _environmentId,
+        },
+        { session }
+      );
+
+      await this.channelConnectionRepository.delete(
+        {
+          subscriberId,
+          _environmentId,
+        },
+        { session }
+      );
     });
 
     return {

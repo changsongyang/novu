@@ -1,27 +1,28 @@
 import {
   CallHandler,
   ExecutionContext,
+  ForbiddenException,
   HttpException,
   Injectable,
   NestInterceptor,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { OrganizationRepository } from '@novu/dal';
+import { isAgentEmailEnabled, ProductFeature } from '@novu/application-generic';
+import { CommunityOrganizationRepository } from '@novu/dal';
 import {
   ApiServiceLevelEnum,
-  productFeatureEnabledForServiceLevel,
   ProductFeatureKeyEnum,
+  productFeatureEnabledForServiceLevel,
   UserSessionData,
 } from '@novu/shared';
 import { Observable } from 'rxjs';
-import { ProductFeature } from '../decorators/product-feature.decorator';
 
 @Injectable()
 export class ProductFeatureInterceptor implements NestInterceptor {
   constructor(
     private reflector: Reflector,
-    private organizationRepository: OrganizationRepository
+    private organizationRepository: CommunityOrganizationRepository
   ) {}
 
   async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
@@ -42,17 +43,25 @@ export class ProductFeatureInterceptor implements NestInterceptor {
       throw new UnauthorizedException();
     }
 
+    if (requestedFeature === ProductFeatureKeyEnum.CUSTOM_DOMAINS && process.env.IS_SELF_HOSTED === 'true') {
+      return next.handle();
+    }
+
     const { organizationId } = user;
 
     const organization = await this.organizationRepository.findById(organizationId);
 
     const enabled = productFeatureEnabledForServiceLevel[requestedFeature].includes(
-      organization?.apiServiceLevel as ApiServiceLevelEnum
+      organization?.apiServiceLevel || ApiServiceLevelEnum.FREE
     );
 
     if (!enabled) {
       // TODO: Reuse PaymentRequiredException from EE billing module.
       throw new HttpException('Payment Required', 402);
+    }
+
+    if (requestedFeature === ProductFeatureKeyEnum.AGENT_EMAIL_INTEGRATION && !isAgentEmailEnabled()) {
+      throw new ForbiddenException('Agent Novu Email is not available in this deployment.');
     }
 
     return next.handle();

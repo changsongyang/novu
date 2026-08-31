@@ -4,12 +4,10 @@ type CloudflareEnv = { env: Record<string, string> };
  * https://remix.run/blog/remix-vite-stable#cloudflare-pages-support
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const hasCloudflareProxyContext = (context: any): context is { cloudflare: CloudflareEnv } => {
   return !!context?.cloudflare?.env;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const hasCloudflareContext = (context: any): context is CloudflareEnv => {
   return !!context?.env;
 };
@@ -55,5 +53,33 @@ export const getEnvVariable = (name: string, context?: unknown): string => {
   return '';
 };
 
-export const isClerkEnabled = () =>
-  (process.env.NOVU_ENTERPRISE === 'true' || process.env.CI_EE_TEST === 'true') && process.env.CLERK_ENABLED === 'true';
+export type EEAuthProvider = 'clerk' | 'better-auth';
+
+export const isEEAuthEnabled = () => process.env.NOVU_ENTERPRISE === 'true' || process.env.CI_EE_TEST === 'true';
+
+export const getEEAuthProvider = (): EEAuthProvider => {
+  const provider = process.env.EE_AUTH_PROVIDER as EEAuthProvider | undefined;
+
+  return provider || 'clerk';
+};
+
+export const isClerkEnabled = () => isEEAuthEnabled() && getEEAuthProvider() === 'clerk';
+
+export const isBetterAuthEnabled = () => isEEAuthEnabled() && getEEAuthProvider() === 'better-auth';
+
+/**
+ * Outbound SSRF DNS-pinning for non-bridge paths (HTTP request steps, provider
+ * webhooks, etc.) applies on Novu Cloud Enterprise builds.
+ *
+ * Bridge user-supplied URLs always enforce DNS pinning regardless of
+ * deployment mode — see ExecuteFrameworkRequest. Self-hosted operators who
+ * need private/internal bridge targets must allow-list them via
+ * NOVU_SAFE_OUTBOUND_ALLOW (link-local / cloud-metadata ranges are never
+ * allow-listed).
+ */
+export const isOutboundSsrfProtectionEnabled = (): boolean => {
+  const isEnterprise = getEnvVariable('NOVU_ENTERPRISE') === 'true' || getEnvVariable('CI_EE_TEST') === 'true';
+  const isSelfHosted = getEnvVariable('IS_SELF_HOSTED') === 'true';
+
+  return isEnterprise && !isSelfHosted;
+};

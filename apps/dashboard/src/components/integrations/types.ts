@@ -5,6 +5,7 @@ export type TableIntegration = {
   name: string;
   identifier: string;
   provider: string;
+  providerId: string;
   channel: ChannelTypeEnum;
   environment: string;
   active: boolean;
@@ -18,10 +19,10 @@ export type IntegrationFormData = {
   identifier: string;
   active: boolean;
   primary: boolean;
-  credentials: Record<string, any>;
+  credentials: Record<string, string>;
+  configurations: Record<string, string>;
   check: boolean;
   environmentId: string;
-  removeNovuBranding?: boolean;
 };
 
 export type IntegrationStep = 'select' | 'configure';

@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { validateData, transformSchema } from './base.validator';
-import { Schema, ZodSchema, JsonSchema } from '../types/schema.types';
+import { JsonSchema, Schema, ZodSchema } from '../types/schema.types';
+import { transformSchema, validateData } from './base.validator';
 
 const schemas = ['zod', 'json'] as const;
 
@@ -309,7 +309,7 @@ describe('validators', () => {
     ];
 
     schemas.forEach((schema) => {
-      return describe(`using ${schema}`, () => {
+      describe(`using ${schema}`, () => {
         testCases
           .filter((testCase) => testCase.schemas[schema] !== null)
           .forEach((testCase) => {
@@ -330,6 +330,23 @@ describe('validators', () => {
 
       // @ts-expect-error - we are testing the type guard
       await expect(validateData(schema, {})).rejects.toThrow('Invalid schema');
+    });
+
+    it('should return errors for a Zod v4 schema, whose error exposes only `issues`', async () => {
+      // Zod v4 removed the `error.errors` alias, leaving `error.issues` as the only array of issues.
+      const zodV4Schema = {
+        safeParseAsync: async () => ({
+          success: false,
+          error: { issues: [{ path: ['name'], message: 'Invalid input' }] },
+        }),
+      } as unknown as ZodSchema;
+
+      const result = await validateData(zodV4Schema, { name: 123 });
+
+      expect(result).toEqual({
+        success: false,
+        errors: [{ message: 'Invalid input', path: '/name' }],
+      });
     });
   });
 
@@ -516,7 +533,7 @@ describe('validators', () => {
     ];
 
     schemas.forEach((schema) => {
-      return describe(`using ${schema}`, () => {
+      describe(`using ${schema}`, () => {
         testCases
           .filter((testCase) => testCase.schemas[schema] !== null)
           .forEach((testCase) => {

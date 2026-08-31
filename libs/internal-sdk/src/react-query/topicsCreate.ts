@@ -12,35 +12,60 @@ import { topicsCreate } from "../funcs/topicsCreate.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
 import * as components from "../models/components/index.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
 import { MutationHookOptions } from "./_types.js";
 
 export type TopicsCreateMutationVariables = {
-  createTopicRequestDto: components.CreateTopicRequestDto;
+  createUpdateTopicRequestDto: components.CreateUpdateTopicRequestDto;
+  failIfExists?: boolean | undefined;
   idempotencyKey?: string | undefined;
   options?: RequestOptions;
 };
 
 export type TopicsCreateMutationData =
-  operations.TopicsControllerCreateTopicResponse;
+  operations.TopicsControllerUpsertTopicResponse;
+
+export type TopicsCreateMutationError =
+  | errors.TopicResponseDto
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
 
 /**
- * Topic creation
+ * Create a topic
  *
  * @remarks
- * Create a topic
+ * Creates a new topic if it does not exist, or updates an existing topic if it already exists. Use ?failIfExists=true to prevent updates.
  */
 export function useTopicsCreateMutation(
   options?: MutationHookOptions<
     TopicsCreateMutationData,
-    Error,
+    TopicsCreateMutationError,
     TopicsCreateMutationVariables
   >,
 ): UseMutationResult<
   TopicsCreateMutationData,
-  Error,
+  TopicsCreateMutationError,
   TopicsCreateMutationVariables
 > {
   const client = useNovuContext();
@@ -66,7 +91,8 @@ export function buildTopicsCreateMutation(
   return {
     mutationKey: mutationKeyTopicsCreate(),
     mutationFn: function topicsCreateMutationFn({
-      createTopicRequestDto,
+      createUpdateTopicRequestDto,
+      failIfExists,
       idempotencyKey,
       options,
     }): Promise<TopicsCreateMutationData> {
@@ -84,7 +110,8 @@ export function buildTopicsCreateMutation(
       };
       return unwrapAsync(topicsCreate(
         client$,
-        createTopicRequestDto,
+        createUpdateTopicRequestDto,
+        failIfExists,
         idempotencyKey,
         mergedOptions,
       ));

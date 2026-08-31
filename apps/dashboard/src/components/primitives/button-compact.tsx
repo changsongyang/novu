@@ -9,16 +9,16 @@ import { tv, type VariantProps } from '@/utils/tv';
 const COMPACT_BUTTON_ROOT_NAME = 'CompactButtonRoot';
 const COMPACT_BUTTON_ICON_NAME = 'CompactButtonIcon';
 
-export const compactButtonVariants = tv({
+const compactButtonVariants = tv({
   slots: {
     root: [
       // base
-      'relative flex shrink-0 items-center justify-center outline-none',
+      'relative flex shrink-0 items-center justify-center outline-hidden',
       'transition duration-200 ease-out',
       // disabled
       'disabled:pointer-events-none disabled:border-transparent disabled:bg-transparent disabled:text-text-disabled disabled:shadow-none',
       // focus
-      'focus:outline-none',
+      'focus:outline-hidden',
     ],
     icon: '',
   },
@@ -57,6 +57,10 @@ export const compactButtonVariants = tv({
       modifiable: {},
     },
     size: {
+      sm: {
+        root: 'size-4',
+        icon: 'size-4',
+      },
       lg: {
         root: 'size-6',
         icon: 'size-5',
@@ -129,6 +133,7 @@ function CompactButtonIcon<T extends React.ElementType>({
 
   return <Component className={icon({ class: className })} {...rest} />;
 }
+
 CompactButtonIcon.displayName = COMPACT_BUTTON_ICON_NAME;
 
 const CompactButton = React.forwardRef<
@@ -145,4 +150,4 @@ const CompactButton = React.forwardRef<
 });
 CompactButton.displayName = 'CompactButton';
 
-export { CompactButton, CompactButtonIcon as Icon, CompactButtonRoot as Root };
+export { CompactButton };

@@ -1,4 +1,14 @@
 import {
+  FieldFilterPartDto,
+  FilterPartsDto,
+  OnlineInLastFilterPartDto,
+  PreviousStepFilterPartDto,
+  RealtimeOnlineFilterPartDto,
+  StepFilterDto,
+  TenantFilterPartDto,
+  WebhookFilterPartDto,
+} from '@novu/application-generic';
+import {
   ExecutionDetailFeedItem,
   JobFeedItem,
   NotificationFeedItemEntity,
@@ -15,19 +25,10 @@ import {
   IDigestTimedMetadata,
   IWorkflowStepMetadata,
   ProvidersIdEnum,
+  SeverityLevelEnum,
   StepTypeEnum,
 } from '@novu/shared';
 import { MessageTemplateDto } from '../../../shared/dtos/message.template.dto';
-import {
-  FieldFilterPartDto,
-  FilterPartsDto,
-  OnlineInLastFilterPartDto,
-  PreviousStepFilterPartDto,
-  RealtimeOnlineFilterPartDto,
-  StepFilterDto,
-  TenantFilterPartDto,
-  WebhookFilterPartDto,
-} from '../../../shared/dtos/step-filter-dto';
 import {
   ActivityNotificationExecutionDetailResponseDto,
   ActivityNotificationJobResponseDto,
@@ -66,18 +67,33 @@ export function mapFeedItemToDto(entity: NotificationFeedItemEntity): ActivityNo
     _organizationId: entity._organizationId,
     _subscriberId: entity._subscriberId,
     _templateId: entity._templateId,
+    topics: entity.topics?.map((topic) => ({
+      _topicId: topic._topicId,
+      topicKey: topic.topicKey,
+    })),
     channels: entity.channels,
     createdAt: entity.createdAt,
     jobs: entity.jobs.map(mapJobToDto),
     tags: entity.tags,
     transactionId: entity.transactionId,
     updatedAt: entity.updatedAt,
-    controls: entity.controls,
-    payload: entity.payload,
-    to: entity.to,
+    controls: entity.controls as Record<string, unknown>,
+    payload: entity.payload as Record<string, unknown>,
+    to: entity.to as Record<string, unknown>,
     subscriber: entity.subscriber ? buildSubscriberDto(entity.subscriber) : undefined,
     template: entity.template ? buildTemplate(entity.template) : undefined,
+    severity: entity.severity ?? SeverityLevelEnum.NONE,
+    critical: entity.critical,
+    contextKeys: entity.contextKeys,
   };
+}
+
+function isNestedStepFilter(child: FilterParts | StepFilter): child is StepFilter {
+  if ('on' in child && typeof child.on === 'string') {
+    return false;
+  }
+
+  return Array.isArray(child.children);
 }
 
 function mapChildFilterToDto(filterPart: FilterParts): FilterPartsDto {
@@ -119,18 +135,50 @@ function mapChildFilterToDto(filterPart: FilterParts): FilterPartsDto {
         on: FilterPartTypeEnum.TENANT,
       } as TenantFilterPartDto;
 
-    default:
-      throw new Error(`Unknown filter part type: ${filterPart}`);
+    default: {
+      const unknownFilterPart = filterPart as FilterParts;
+
+      throw new Error(`Unknown filter part type: ${String(unknownFilterPart.on)}`);
+    }
   }
 }
 
-function mapToFilterDto(stepFilter: StepFilter): StepFilterDto {
-  return {
-    children: stepFilter.children.map((child) => mapChildFilterToDto(child)),
+function mapStepFilterToDto(stepFilter: StepFilter): StepFilterDto[] {
+  const directChildren: FilterPartsDto[] = [];
+  const nestedFilters: StepFilterDto[] = [];
+
+  for (const child of stepFilter.children ?? []) {
+    if (isNestedStepFilter(child)) {
+      nestedFilters.push(...mapStepFilterToDto(child));
+      continue;
+    }
+
+    directChildren.push(mapChildFilterToDto(child));
+  }
+
+  if (directChildren.length === 0 && nestedFilters.length > 0) {
+    if (stepFilter.isNegated) {
+      return nestedFilters.map((nestedFilter) => ({
+        ...nestedFilter,
+        isNegated: Boolean(stepFilter.isNegated) !== Boolean(nestedFilter.isNegated),
+      }));
+    }
+
+    return nestedFilters;
+  }
+
+  const currentFilter: StepFilterDto = {
+    children: directChildren,
     isNegated: stepFilter.isNegated,
     type: stepFilter.type,
     value: stepFilter.value,
   };
+
+  return [currentFilter, ...nestedFilters];
+}
+
+function mapStepFiltersToDto(filters: StepFilter[]): StepFilterDto[] {
+  return filters.flatMap((filter) => mapStepFilterToDto(filter));
 }
 
 function convertStepToResponse(step: NotificationStepEntity): ActivityNotificationStepResponseDto {
@@ -147,8 +195,7 @@ function convertStepToResponse(step: NotificationStepEntity): ActivityNotificati
   responseDto._parentId = step._parentId || null;
 
   // Map filters
-  responseDto.filters = (step.filters || []).map(mapToFilterDto);
-
+  responseDto.filters = mapStepFiltersToDto(step.filters || []);
   // Map template if exists
   if (step.template) {
     const messageTemplateDto = new MessageTemplateDto();
@@ -178,21 +225,38 @@ function convertStepToResponse(step: NotificationStepEntity): ActivityNotificati
 }
 
 function isDigestRegularMetadata(item: IWorkflowStepMetadata): item is IDigestRegularMetadata {
-  return item.type === DigestTypeEnum.REGULAR || item.type === DigestTypeEnum.BACKOFF;
+  return 'type' in item && (item.type === DigestTypeEnum.REGULAR || item.type === DigestTypeEnum.BACKOFF);
 }
 
 function isDigestTimedMetadata(item: IWorkflowStepMetadata): item is IDigestTimedMetadata {
-  return item.type === DigestTypeEnum.TIMED;
+  return 'type' in item && item.type === DigestTypeEnum.TIMED;
 }
 
 function mapDigest(
-  digestItem?: IWorkflowStepMetadata & {
-    events?: any[];
-  }
+  digestData?:
+    | (IWorkflowStepMetadata & {
+        events?: any[];
+      })
+    | string
+    | null
 ): DigestMetadataDto | undefined {
+  if (!digestData) {
+    return undefined;
+  }
+
+  const digestItem =
+    typeof digestData === 'string'
+      ? (JSON.parse(digestData) as IWorkflowStepMetadata & {
+          events?: any[];
+        })
+      : (digestData as IWorkflowStepMetadata & {
+          events?: any[];
+        });
+
   if (!digestItem) {
     return undefined;
   }
+
   // Type guarding and mapping based on the type of item
   if (isDigestRegularMetadata(digestItem)) {
     // If it's IDigestRegularMetadata
@@ -223,6 +287,7 @@ function mapDigest(
         ordinalValue: digestItem.timed?.ordinalValue,
         monthlyType: digestItem.timed?.monthlyType,
         cronExpression: digestItem.timed?.cronExpression,
+        untilDate: digestItem.timed?.untilDate,
       },
     };
   }
@@ -237,10 +302,12 @@ function mapJobToDto(item: JobFeedItem): ActivityNotificationJobResponseDto {
     digest: mapDigest(item.digest),
     executionDetails: item.executionDetails.map(convertExecutionDetail),
     step: convertStepToResponse(item.step),
+    overrides: item.overrides,
     payload: item.payload,
     providerId: item.providerId as ProvidersIdEnum,
     status: item.status,
     updatedAt: item.updatedAt,
+    scheduleExtensionsCount: item.scheduleExtensionsCount,
   };
 }
 

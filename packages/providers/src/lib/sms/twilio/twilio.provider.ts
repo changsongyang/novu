@@ -1,4 +1,4 @@
-import { SmsProviderIdEnum } from '@novu/shared';
+import { getTwilioSmsClientRegionConfig, SmsProviderIdEnum } from '@novu/shared';
 import {
   ChannelTypeEnum,
   ISendMessageSuccessResponse,
@@ -24,10 +24,13 @@ export class TwilioSmsProvider extends BaseProvider implements ISmsProvider {
       accountSid?: string;
       authToken?: string;
       from?: string;
+      region?: string;
     }
   ) {
     super();
-    this.twilioClient = new Twilio(config.accountSid, config.authToken);
+    const regionConfig = getTwilioSmsClientRegionConfig(config.region);
+
+    this.twilioClient = new Twilio(config.accountSid, config.authToken, regionConfig);
   }
 
   async sendMessage(
@@ -58,7 +61,6 @@ export class TwilioSmsProvider extends BaseProvider implements ISmsProvider {
 
   parseEventBody(body: any | any[], identifier: string): ISMSEventBody | undefined {
     if (Array.isArray(body)) {
-      // eslint-disable-next-line no-param-reassign
       body = body.find((item) => item.MessageSid === identifier);
     }
 

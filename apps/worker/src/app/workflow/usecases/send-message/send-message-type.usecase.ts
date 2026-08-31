@@ -1,29 +1,65 @@
-import { captureException } from '@sentry/node';
-import { MessageEntity, MessageRepository } from '@novu/dal';
-import { ExecutionLogRoute } from '@novu/application-generic';
-import { SendMessageCommand } from './send-message.command';
+import { CreateExecutionDetails, DetailEnum } from '@novu/application-generic';
+import { DeliveryLifecycleState, JobEntity, MessageEntity, MessageRepository } from '@novu/dal';
+import { safeJsonStringify } from '@novu/shared';
+import { SendMessageChannelCommand } from './send-message-channel.command';
+
+export enum SendMessageStatus {
+  SUCCESS = 'success',
+  FAILED = 'failed',
+  SKIPPED = 'skipped',
+  THROTTLED = 'throttled',
+}
+
+export type SendMessageResultPassed = {
+  status: SendMessageStatus.SUCCESS;
+  extraData?: string;
+  job?: JobEntity;
+};
+
+export type SendMessageResultSkipped = {
+  status: SendMessageStatus.SKIPPED;
+  deliveryLifecycleState?: DeliveryLifecycleState;
+  extraData?: string;
+  job?: JobEntity;
+};
+
+export type SendMessageResultFailed = {
+  status: SendMessageStatus.FAILED;
+  errorMessage: DetailEnum;
+  extraData?: string;
+  job?: JobEntity;
+  shouldHalt?: boolean;
+};
+
+export type SendMessageResultThrottled = {
+  status: SendMessageStatus.THROTTLED;
+  extraData?: string;
+  job?: JobEntity;
+};
+
+export type SendMessageResult =
+  | SendMessageResultPassed
+  | SendMessageResultSkipped
+  | SendMessageResultFailed
+  | SendMessageResultThrottled;
 
 export abstract class SendMessageType {
   protected constructor(
     protected messageRepository: MessageRepository,
-    protected executionLogRoute: ExecutionLogRoute
+    protected createExecutionDetails: CreateExecutionDetails
   ) {}
 
-  public abstract execute(command: SendMessageCommand): void;
+  public abstract execute(command: SendMessageChannelCommand): Promise<SendMessageResult>;
 
   protected async sendErrorStatus(
     message: MessageEntity,
     status: 'error' | 'sent' | 'warning',
     errorId: string,
     errorMessageFallback: string,
-    command: SendMessageCommand,
+    command: SendMessageChannelCommand,
     error?: any
   ): Promise<void> {
     const errorString = this.stringifyError(error) || errorMessageFallback;
-
-    if (error) {
-      captureException(errorString);
-    }
 
     await this.messageRepository.updateMessageStatus(
       command.environmentId,
@@ -42,7 +78,7 @@ export abstract class SendMessageType {
       return error.toString();
     }
     if (Object.keys(error)?.length > 0) {
-      return JSON.stringify(error);
+      return safeJsonStringify(error);
     }
 
     return '';

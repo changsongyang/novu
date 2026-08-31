@@ -4,6 +4,7 @@
 
 import { NovuCore } from "../core.js";
 import { encodeSimple } from "../lib/encodings.js";
+import { matchStatusCode } from "../lib/http.js";
 import * as M from "../lib/matchers.js";
 import { compactMap } from "../lib/primitives.js";
 import { safeParse } from "../lib/schemas.js";
@@ -18,31 +19,71 @@ import {
   UnexpectedClientError,
 } from "../models/errors/httpclienterrors.js";
 import * as errors from "../models/errors/index.js";
-import { SDKError } from "../models/errors/sdkerror.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
 import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
+import { APICall, APIPromise } from "../types/async.js";
 import { Result } from "../types/fp.js";
 
-export async function workflowsDelete(
+/**
+ * Delete a workflow
+ *
+ * @remarks
+ * Removes a specific workflow by its unique identifier **workflowId**
+ *
+ * This operation requires one of {@link Security.bearerAuth}, {@link Security.secretKey}, or {@link Security.bearerAuth} to be set on the `security` parameter when initializing the SDK.
+ */
+export function workflowsDelete(
+  client: NovuCore,
+  workflowId: string,
+  idempotencyKey?: string | undefined,
+  options?: RequestOptions,
+): APIPromise<
+  Result<
+    operations.WorkflowControllerRemoveWorkflowResponse | undefined,
+    | errors.ErrorDto
+    | errors.ValidationErrorDto
+    | NovuError
+    | ResponseValidationError
+    | ConnectionError
+    | RequestAbortedError
+    | RequestTimeoutError
+    | InvalidRequestError
+    | UnexpectedClientError
+    | SDKValidationError
+  >
+> {
+  return new APIPromise($do(
+    client,
+    workflowId,
+    idempotencyKey,
+    options,
+  ));
+}
+
+async function $do(
   client: NovuCore,
   workflowId: string,
   idempotencyKey?: string | undefined,
   options?: RequestOptions,
 ): Promise<
-  Result<
-    operations.WorkflowControllerRemoveWorkflowResponse | undefined,
-    | errors.ErrorDto
-    | errors.ErrorDto
-    | errors.ValidationErrorDto
-    | errors.ErrorDto
-    | SDKError
-    | SDKValidationError
-    | UnexpectedClientError
-    | InvalidRequestError
-    | RequestAbortedError
-    | RequestTimeoutError
-    | ConnectionError
-  >
+  [
+    Result<
+      operations.WorkflowControllerRemoveWorkflowResponse | undefined,
+      | errors.ErrorDto
+      | errors.ValidationErrorDto
+      | NovuError
+      | ResponseValidationError
+      | ConnectionError
+      | RequestAbortedError
+      | RequestTimeoutError
+      | InvalidRequestError
+      | UnexpectedClientError
+      | SDKValidationError
+    >,
+    APICall,
+  ]
 > {
   const input: operations.WorkflowControllerRemoveWorkflowRequest = {
     workflowId: workflowId,
@@ -58,7 +99,7 @@ export async function workflowsDelete(
     "Input validation failed",
   );
   if (!parsed.ok) {
-    return parsed;
+    return [parsed, { status: "invalid" }];
   }
   const payload = parsed.value;
   const body = null;
@@ -69,7 +110,6 @@ export async function workflowsDelete(
       charEncoding: "percent",
     }),
   };
-
   const path = pathToFunc("/v2/workflows/{workflowId}")(pathParams);
 
   const headers = new Headers(compactMap({
@@ -82,12 +122,13 @@ export async function workflowsDelete(
   }));
 
   const securityInput = await extractSecurity(client._options.security);
-  const requestSecurity = resolveGlobalSecurity(securityInput);
+  const requestSecurity = resolveGlobalSecurity(securityInput, [1, 0]);
 
   const context = {
-    baseURL: options?.serverURL ?? "",
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
     operationID: "WorkflowController_removeWorkflow",
-    oAuth2Scopes: [],
+    oAuth2Scopes: null,
 
     resolvedSecurity: requestSecurity,
 
@@ -115,37 +156,23 @@ export async function workflowsDelete(
     path: path,
     headers: headers,
     body: body,
+    userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1,
   }, options);
   if (!requestRes.ok) {
-    return requestRes;
+    return [requestRes, { status: "invalid" }];
   }
   const req = requestRes.value;
 
   const doResult = await client._do(req, {
     context,
-    errorCodes: [
-      "400",
-      "401",
-      "403",
-      "404",
-      "405",
-      "409",
-      "413",
-      "414",
-      "415",
-      "422",
-      "429",
-      "4XX",
-      "500",
-      "503",
-      "5XX",
-    ],
+    isErrorStatusCode: (statusCode: number) =>
+      matchStatusCode({ status: statusCode } as Response, ["4XX", "5XX"]),
     retryConfig: context.retryConfig,
     retryCodes: context.retryCodes,
   });
   if (!doResult.ok) {
-    return doResult;
+    return [doResult, { status: "request-error", request: req }];
   }
   const response = doResult.value;
 
@@ -156,16 +183,15 @@ export async function workflowsDelete(
   const [result] = await M.match<
     operations.WorkflowControllerRemoveWorkflowResponse | undefined,
     | errors.ErrorDto
-    | errors.ErrorDto
     | errors.ValidationErrorDto
-    | errors.ErrorDto
-    | SDKError
-    | SDKValidationError
-    | UnexpectedClientError
-    | InvalidRequestError
+    | NovuError
+    | ResponseValidationError
+    | ConnectionError
     | RequestAbortedError
     | RequestTimeoutError
-    | ConnectionError
+    | InvalidRequestError
+    | UnexpectedClientError
+    | SDKValidationError
   >(
     M.nil(
       204,
@@ -184,10 +210,10 @@ export async function workflowsDelete(
     M.fail(503),
     M.fail("4XX"),
     M.fail("5XX"),
-  )(response, { extraFields: responseFields });
+  )(response, req, { extraFields: responseFields });
   if (!result.ok) {
-    return result;
+    return [result, { status: "complete", request: req, response }];
   }
 
-  return result;
+  return [result, { status: "complete", request: req, response }];
 }

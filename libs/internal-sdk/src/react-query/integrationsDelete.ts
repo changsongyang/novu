@@ -11,6 +11,17 @@ import { NovuCore } from "../core.js";
 import { integrationsDelete } from "../funcs/integrationsDelete.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
@@ -25,18 +36,34 @@ export type IntegrationsDeleteMutationVariables = {
 export type IntegrationsDeleteMutationData =
   operations.IntegrationsControllerRemoveIntegrationResponse;
 
+export type IntegrationsDeleteMutationError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
 /**
- * Delete integration
+ * Delete an integration
+ *
+ * @remarks
+ * Delete an integration by its unique key identifier **integrationId**.
+ *     This action is irreversible. Only integration metadata is returned, credentials field is returned as empty object.
  */
 export function useIntegrationsDeleteMutation(
   options?: MutationHookOptions<
     IntegrationsDeleteMutationData,
-    Error,
+    IntegrationsDeleteMutationError,
     IntegrationsDeleteMutationVariables
   >,
 ): UseMutationResult<
   IntegrationsDeleteMutationData,
-  Error,
+  IntegrationsDeleteMutationError,
   IntegrationsDeleteMutationVariables
 > {
   const client = useNovuContext();

@@ -1,7 +1,6 @@
 import { init, LDClient, LDMultiKindContext } from '@launchdarkly/node-server-sdk';
 import { Injectable } from '@nestjs/common';
-import { FeatureFlagsKeysEnum } from '@novu/shared';
-import type { IFeatureFlagContext, IFeatureFlagsService } from './types';
+import type { FeatureFlagContext, FeatureFlagContextBase, IFeatureFlagsService } from './types';
 
 @Injectable()
 export class LaunchDarklyFeatureFlagsService implements IFeatureFlagsService {
@@ -25,60 +24,75 @@ export class LaunchDarklyFeatureFlagsService implements IFeatureFlagsService {
     }
   }
 
-  async getBooleanFlag<T extends FeatureFlagsKeysEnum>({
+  async getFlag<T_Result>({
     key,
     defaultValue,
     environment,
     organization,
     user,
-  }: IFeatureFlagContext<T>): Promise<boolean> {
-    return (await this.client.variation(
-      key,
-      this.buildLDContext({ user, organization, environment }),
-      defaultValue
-    )) as boolean;
-  }
-  async getNumberFlag<T extends FeatureFlagsKeysEnum>({
-    key,
-    defaultValue,
-    environment,
-    organization,
-    user,
-  }: IFeatureFlagContext<T>): Promise<number> {
-    return (await this.client.variation(
-      key,
-      this.buildLDContext({ user, organization, environment }),
-      defaultValue
-    )) as number;
+    component,
+  }: FeatureFlagContext<T_Result>): Promise<T_Result> {
+    const context = this.buildLDContext({ user, organization, environment, component });
+    const newVar = await this.client.variation(key, context, defaultValue);
+
+    return newVar;
   }
 
-  private buildLDContext<T extends FeatureFlagsKeysEnum>({
-    user,
-    organization,
-    environment,
-  }: Pick<IFeatureFlagContext<T>, 'user' | 'organization' | 'environment'>): LDMultiKindContext {
+  private buildLDContext({ user, organization, environment, component }: FeatureFlagContextBase): LDMultiKindContext {
     const mappedContext: LDMultiKindContext = {
       kind: 'multi',
     };
 
     if (environment?._id) {
       mappedContext.environment = {
-        ...environment,
         key: environment._id,
+        createdAt: environment.createdAt,
+        updatedAt: environment.updatedAt,
       };
     }
 
     if (organization?._id) {
       mappedContext.organization = {
-        ...organization,
         key: organization._id,
+        createdAt: organization.createdAt,
+        updatedAt: organization.updatedAt,
+        externalId: organization.externalId,
+        apiServiceLevel: organization.apiServiceLevel,
       };
     }
 
     if (user?._id) {
       mappedContext.user = {
-        ...user,
         key: user._id,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        externalId: user.externalId,
+      };
+    }
+
+    const region = process.env.NOVU_REGION;
+    if (region) {
+      mappedContext.region = {
+        key: region,
+        awsRegion: region,
+      };
+    }
+
+    if (component) {
+      mappedContext.component = {
+        key: component,
+      };
+    }
+
+    /*
+     * LaunchDarkly requires at least one context kind in multi-kind contexts
+     * Add a fallback global context to prevent "A multi-kind context must contain at least one kind" error
+     */
+    const hasAnyContext = mappedContext.environment || mappedContext.organization || mappedContext.user;
+    if (!hasAnyContext) {
+      mappedContext.global = {
+        key: 'global-context',
+        anonymous: true,
       };
     }
 

@@ -1,14 +1,20 @@
 import { ChatProviderIdEnum } from '@novu/shared';
-import { ChannelTypeEnum, ISendMessageSuccessResponse, IChatOptions, IChatProvider } from '@novu/stateless';
-import axios from 'axios';
+import {
+  ChannelTypeEnum,
+  ENDPOINT_TYPES,
+  IChatOptions,
+  IChatProvider,
+  ISendMessageSuccessResponse,
+  isChannelDataOfType,
+} from '@novu/stateless';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
+import { resolveSafeChatWebhookUrl, safeChatWebhookJsonRequest } from '../../../utils/safe-chat-webhook-request';
 import { WithPassthrough } from '../../../utils/types';
 
 export class RocketChatProvider extends BaseProvider implements IChatProvider {
   id = ChatProviderIdEnum.RocketChat;
   protected casing: CasingEnum = CasingEnum.SNAKE_CASE;
   channelType = ChannelTypeEnum.CHAT as ChannelTypeEnum.CHAT;
-  private axiosInstance = axios.create();
 
   constructor(
     private config: {
@@ -23,7 +29,14 @@ export class RocketChatProvider extends BaseProvider implements IChatProvider {
     options: IChatOptions,
     bridgeProviderData: WithPassthrough<Record<string, unknown>> = {}
   ): Promise<ISendMessageSuccessResponse> {
-    const roomId = options.channel;
+    const { channelData } = options;
+
+    if (!isChannelDataOfType(channelData, ENDPOINT_TYPES.WEBHOOK)) {
+      throw new Error('Invalid channel data for RocketChat provider');
+    }
+
+    const roomId = channelData.endpoint.channel;
+
     const payload = {
       message: {
         rid: roomId,
@@ -37,14 +50,19 @@ export class RocketChatProvider extends BaseProvider implements IChatProvider {
       'Content-Type': 'application/json',
       ...transformedData.headers,
     };
-    const baseURL = `${options.webhookUrl.toString()}/api/v1/chat.sendMessage`;
-    const { data } = await this.axiosInstance.post(baseURL, transformedData.body, {
+    const baseUrl = resolveSafeChatWebhookUrl(channelData.endpoint.url);
+    const targetUrl = new URL('/api/v1/chat.sendMessage', baseUrl).toString();
+    const response = await safeChatWebhookJsonRequest<{
+      message: { _id: string; ts: string };
+    }>({
+      url: targetUrl,
+      body: transformedData.body,
       headers,
     });
 
     return {
-      id: data.message._id,
-      date: data.message.ts,
+      id: response.body.message._id,
+      date: response.body.message.ts,
     };
   }
 }

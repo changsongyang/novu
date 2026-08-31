@@ -1,16 +1,32 @@
 import { EnvironmentEntity, OrganizationEntity, UserEntity } from '@novu/dal';
-import { FeatureFlagsKeysEnum, type FlagType } from '@novu/shared';
+import { FeatureFlagsKeysEnum } from '@novu/shared';
 
 type PartialWithId<T> = Partial<T> & { _id: string };
 
-export interface IFeatureFlagContext<T extends FeatureFlagsKeysEnum> {
-  key: T;
-  defaultValue: FlagType<T>;
-  environment?: PartialWithId<EnvironmentEntity>;
-  organization?: PartialWithId<OrganizationEntity>;
-  user?: PartialWithId<UserEntity>;
-}
+export type FeatureFlagContextBase =
+  | {
+      environment: PartialWithId<EnvironmentEntity>;
+      organization?: PartialWithId<OrganizationEntity>;
+      user?: PartialWithId<UserEntity>;
+      component?: string;
+    }
+  | {
+      environment?: PartialWithId<EnvironmentEntity>;
+      organization: PartialWithId<OrganizationEntity>;
+      user?: PartialWithId<UserEntity>;
+      component?: string;
+    }
+  | {
+      environment?: PartialWithId<EnvironmentEntity>;
+      organization?: PartialWithId<OrganizationEntity>;
+      user: PartialWithId<UserEntity>;
+      component?: string;
+    };
 
+export type FeatureFlagContext<T_Result> = FeatureFlagContextBase & {
+  key: FeatureFlagsKeysEnum;
+  defaultValue: T_Result;
+};
 export interface IFeatureFlagsService {
   isEnabled: boolean;
 
@@ -18,7 +34,5 @@ export interface IFeatureFlagsService {
 
   gracefullyShutdown: () => Promise<void>;
 
-  getBooleanFlag<T extends FeatureFlagsKeysEnum>(context: IFeatureFlagContext<T>): Promise<boolean>;
-
-  getNumberFlag<T extends FeatureFlagsKeysEnum>(context: IFeatureFlagContext<T>): Promise<number>;
+  getFlag: <T_Result>(context: FeatureFlagContext<T_Result>) => Promise<T_Result>;
 }

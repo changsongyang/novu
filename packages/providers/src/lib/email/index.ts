@@ -1,8 +1,10 @@
+export * from './anypost/anypost.provider';
 export * from './braze/braze.provider';
 export * from './brevo/brevo.provider';
 export * from './email-webhook/email-webhook.provider';
 export * from './emailjs/emailjs.config';
 export * from './emailjs/emailjs.provider';
+export * from './infobip/infobip.provider';
 export * from './mailersend/mailersend.provider';
 export * from './mailgun/mailgun.provider';
 export * from './mailjet/mailjet.provider';
@@ -20,4 +22,3 @@ export * from './ses/ses.config';
 export * from './ses/ses.provider';
 export * from './sparkpost/sparkpost.error';
 export * from './sparkpost/sparkpost.provider';
-export * from './infobip/infobip.provider';

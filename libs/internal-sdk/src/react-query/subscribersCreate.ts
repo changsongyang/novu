@@ -12,6 +12,17 @@ import { subscribersCreate } from "../funcs/subscribersCreate.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
 import * as components from "../models/components/index.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
@@ -19,6 +30,7 @@ import { MutationHookOptions } from "./_types.js";
 
 export type SubscribersCreateMutationVariables = {
   createSubscriberRequestDto: components.CreateSubscriberRequestDto;
+  failIfExists?: boolean | undefined;
   idempotencyKey?: string | undefined;
   options?: RequestOptions;
 };
@@ -26,21 +38,35 @@ export type SubscribersCreateMutationVariables = {
 export type SubscribersCreateMutationData =
   operations.SubscribersControllerCreateSubscriberResponse;
 
+export type SubscribersCreateMutationError =
+  | errors.SubscriberResponseDto
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
 /**
- * Create subscriber
+ * Create a subscriber
  *
  * @remarks
- * Create subscriber with the given data
+ * Create a subscriber with the subscriber attributes.
+ *       **subscriberId** is a required field, rest other fields are optional, if the subscriber already exists, it will be updated
  */
 export function useSubscribersCreateMutation(
   options?: MutationHookOptions<
     SubscribersCreateMutationData,
-    Error,
+    SubscribersCreateMutationError,
     SubscribersCreateMutationVariables
   >,
 ): UseMutationResult<
   SubscribersCreateMutationData,
-  Error,
+  SubscribersCreateMutationError,
   SubscribersCreateMutationVariables
 > {
   const client = useNovuContext();
@@ -67,6 +93,7 @@ export function buildSubscribersCreateMutation(
     mutationKey: mutationKeySubscribersCreate(),
     mutationFn: function subscribersCreateMutationFn({
       createSubscriberRequestDto,
+      failIfExists,
       idempotencyKey,
       options,
     }): Promise<SubscribersCreateMutationData> {
@@ -85,6 +112,7 @@ export function buildSubscribersCreateMutation(
       return unwrapAsync(subscribersCreate(
         client$,
         createSubscriberRequestDto,
+        failIfExists,
         idempotencyKey,
         mergedOptions,
       ));

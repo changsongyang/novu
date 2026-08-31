@@ -1,28 +1,28 @@
+import { RedirectTargetEnum } from '@novu/shared';
 import { useFormContext } from 'react-hook-form';
-
-import { ControlInput } from '@/components/primitives/control-input';
-import { FormControl, FormField, FormItem, FormMessagePure } from '@/components/primitives/form/form';
+import { FormControl, FormField, FormItem, FormMessage } from '@/components/primitives/form/form';
 import { InputProps, InputRoot } from '@/components/primitives/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/primitives/select';
+import { ControlInput } from '@/components/workflow-editor/control-input';
 import { useSaveForm } from '@/components/workflow-editor/steps/save-form-context';
-import { LiquidVariable } from '@/utils/parseStepVariablesToLiquidVariables';
+import { IsAllowedVariable, LiquidVariable } from '@/utils/parseStepVariables';
 
 type URLInputProps = Omit<InputProps, 'value' | 'onChange'> & {
   options: string[];
-  withHint?: boolean;
   fields: {
     urlKey: string;
     targetKey: string;
   };
   variables: LiquidVariable[];
+  isAllowedVariable: IsAllowedVariable;
 };
 
 export const URLInput = ({
   options,
   placeholder,
   fields: { urlKey, targetKey },
-  withHint = true,
   variables = [],
+  isAllowedVariable,
 }: URLInputProps) => {
   const { control, getFieldState } = useFormContext();
   const { saveForm } = useSaveForm();
@@ -44,9 +44,10 @@ export const URLInput = ({
                     multiline={false}
                     indentWithTab={false}
                     placeholder={placeholder}
-                    value={field.value}
+                    value={field.value ?? ''}
                     onChange={field.onChange}
                     variables={variables}
+                    isAllowedVariable={isAllowedVariable}
                   />
                 </FormItem>
               )}
@@ -55,16 +56,16 @@ export const URLInput = ({
               control={control}
               name={targetKey}
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="space-y-0">
                   <FormControl>
                     <Select
-                      value={field.value}
+                      value={field.value ?? RedirectTargetEnum.SELF}
                       onValueChange={(value) => {
                         field.onChange(value);
                         saveForm();
                       }}
                     >
-                      <SelectTrigger className="border-1 h-[36px] max-w-24 rounded-l-none border-l-0 text-xs focus:ring-0">
+                      <SelectTrigger className="border h-[36px] max-w-24 rounded-l-none border-l-0 text-xs focus:ring-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -82,9 +83,7 @@ export const URLInput = ({
           </InputRoot>
         </div>
       </div>
-      <FormMessagePure error={error ? String(error.message) : undefined}>
-        {withHint && 'Type {{ for variables'}
-      </FormMessagePure>
+      <FormField control={control} name={urlKey} render={() => <FormMessage />} />
     </div>
   );
 };

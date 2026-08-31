@@ -12,6 +12,17 @@ import { subscribersCreateBulk } from "../funcs/subscribersCreateBulk.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
 import * as components from "../models/components/index.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
@@ -26,23 +37,34 @@ export type SubscribersCreateBulkMutationVariables = {
 export type SubscribersCreateBulkMutationData =
   operations.SubscribersV1ControllerBulkCreateSubscribersResponse;
 
+export type SubscribersCreateBulkMutationError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
 /**
  * Bulk create subscribers
  *
  * @remarks
  *
- *       Using this endpoint you can create multiple subscribers at once, to avoid multiple calls to the API.
- *       The bulk API is limited to 500 subscribers per request.
+ *       Using this endpoint multiple subscribers can be created at once. The bulk API is limited to 500 subscribers per request.
  */
 export function useSubscribersCreateBulkMutation(
   options?: MutationHookOptions<
     SubscribersCreateBulkMutationData,
-    Error,
+    SubscribersCreateBulkMutationError,
     SubscribersCreateBulkMutationVariables
   >,
 ): UseMutationResult<
   SubscribersCreateBulkMutationData,
-  Error,
+  SubscribersCreateBulkMutationError,
   SubscribersCreateBulkMutationVariables
 > {
   const client = useNovuContext();

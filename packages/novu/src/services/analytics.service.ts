@@ -1,5 +1,5 @@
-import { Analytics } from '@segment/analytics-node';
 import { UserSessionData } from '@novu/shared';
+import { Analytics } from '@segment/analytics-node';
 import { ANALYTICS_ENABLED, SEGMENTS_WRITE_KEY } from '../constants';
 
 export enum AnalyticsEventEnum {
@@ -69,7 +69,7 @@ export class AnalyticService {
   }: {
     data?: Record<string, unknown>;
     event: string;
-    identity: { userId: string } | { anonymousId: string };
+    identity: { userId: string } | { anonymousId: string } | { userId: string; anonymousId: string };
   }) {
     if (!this.isAnalyticsEnabled()) {
       return;

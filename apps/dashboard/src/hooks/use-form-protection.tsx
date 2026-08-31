@@ -1,6 +1,6 @@
+import { useCallback, useMemo, useState } from 'react';
 import { UnsavedChangesAlertDialog } from '@/components/unsaved-changes-alert-dialog';
 import { useBeforeUnload } from '@/hooks/use-before-unload';
-import { useCallback, useState } from 'react';
 import { useFindDirtyForm } from './use-find-dirty-form';
 
 type UseFormProtectionProps<T> = {
@@ -27,21 +27,26 @@ export function useFormProtection<T>(props: UseFormProtectionProps<T>) {
     [isDirty, onValueChange]
   );
 
-  const ProtectionAlert = () => (
-    <UnsavedChangesAlertDialog
-      show={showAlert}
-      onCancel={() => {
-        setShowAlert(false);
-        setPendingChange(null);
-      }}
-      onProceed={() => {
-        if (pendingChange) {
-          onValueChange(pendingChange.value);
-        }
-        setShowAlert(false);
-        setPendingChange(null);
-      }}
-    />
+  const ProtectionAlert = useMemo(
+    () => (
+      <UnsavedChangesAlertDialog
+        show={showAlert}
+        onCancel={() => {
+          setShowAlert(false);
+          setPendingChange(null);
+        }}
+        onProceed={() => {
+          setShowAlert(false);
+        }}
+        onExitComplete={() => {
+          if (pendingChange) {
+            onValueChange(pendingChange.value);
+          }
+          setPendingChange(null);
+        }}
+      />
+    ),
+    [onValueChange, pendingChange, showAlert]
   );
 
   return { isDirty, protectedOnValueChange, ProtectionAlert, ref };

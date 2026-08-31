@@ -1,9 +1,10 @@
 import { Module, Provider } from '@nestjs/common';
 import { NovuClient } from './nest.client';
 import { NovuController } from './nest.controller';
-import { registerApiPath } from './nest.register-api-path';
-import { ASYNC_OPTIONS_TYPE, NovuBaseModule, OPTIONS_TYPE } from './nest.module-definition';
 import { NovuHandler } from './nest.handler';
+import { ASYNC_OPTIONS_TYPE, NovuBaseModule, OPTIONS_TYPE } from './nest.module-definition';
+import { registerApiPath } from './nest.register-api-path';
+import { registerControllerDecorators } from './nest.register-controller-decorators';
 import { applyDecorators } from './nest.utils';
 
 /**
@@ -42,7 +43,7 @@ export class NovuModule extends NovuBaseModule {
    * @returns The Novu module
    */
   static register(options: typeof OPTIONS_TYPE, customProviders?: Provider[]) {
-    const superModule = super.register(options);
+    const superModule = NovuBaseModule.register(options);
 
     superModule.controllers = [applyDecorators(NovuController, options.controllerDecorators || [])];
     superModule.providers?.push(registerApiPath, NovuClient, NovuHandler, ...(customProviders || []));
@@ -59,10 +60,16 @@ export class NovuModule extends NovuBaseModule {
    * @returns The Novu module
    */
   static registerAsync(options: typeof ASYNC_OPTIONS_TYPE, customProviders?: Provider[]) {
-    const superModule = super.registerAsync(options);
+    const superModule = NovuBaseModule.registerAsync(options);
 
     superModule.controllers = [NovuController];
-    superModule.providers?.push(registerApiPath, NovuClient, NovuHandler, ...(customProviders || []));
+    superModule.providers?.push(
+      registerApiPath,
+      registerControllerDecorators,
+      NovuClient,
+      NovuHandler,
+      ...(customProviders || [])
+    );
     superModule.exports = [NovuClient, NovuHandler];
 
     return superModule;

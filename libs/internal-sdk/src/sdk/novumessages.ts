@@ -12,25 +12,32 @@ import { unwrapAsync } from "../types/fp.js";
 
 export class NovuMessages extends ClientSDK {
   /**
-   * Mark a subscriber messages as seen, read, unseen or unread
+   * Update notification action status
+   *
+   * @remarks
+   * This API is deprecated, use v2 API instead. Update in-app notification's action status by its unique key identifier **messageId** and type field **type**.
+   *       **type** field can be **primary** or **secondary**
+   *
+   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
    */
-  async markAllAs(
-    messageMarkAsRequestDto: components.MessageMarkAsRequestDto,
-    subscriberId: string,
-    idempotencyKey?: string | undefined,
+  async updateAsSeen(
+    request: operations.SubscribersV1ControllerMarkActionAsSeenRequest,
     options?: RequestOptions,
-  ): Promise<operations.SubscribersV1ControllerMarkMessagesAsResponse> {
-    return unwrapAsync(subscribersMessagesMarkAllAs(
+  ): Promise<operations.SubscribersV1ControllerMarkActionAsSeenResponse> {
+    return unwrapAsync(subscribersMessagesUpdateAsSeen(
       this,
-      messageMarkAsRequestDto,
-      subscriberId,
-      idempotencyKey,
+      request,
       options,
     ));
   }
 
   /**
-   * Marks all the subscriber messages as read, unread, seen or unseen. Optionally you can pass feed id (or array) to mark messages of a particular feed.
+   * Update all notifications state
+   *
+   * @remarks
+   * This API is deprecated, use v2 API instead. Update all subscriber in-app notifications state such as read, unread, seen or unseen by **subscriberId**.
+   *
+   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
    */
   async markAll(
     markAllMessageAsRequestDto: components.MarkAllMessageAsRequestDto,
@@ -48,15 +55,25 @@ export class NovuMessages extends ClientSDK {
   }
 
   /**
-   * Mark message action as seen
+   * Update notifications state
+   *
+   * @remarks
+   * This API is deprecated, use v2 API instead. Update subscriber's multiple in-app notifications state such as seen, read, unseen or unread by **subscriberId**.
+   *       **messageId** is of type mongodbId of notifications.
+   *
+   * @deprecated method: This will be removed in a future release, please migrate away from it as soon as possible.
    */
-  async updateAsSeen(
-    request: operations.SubscribersV1ControllerMarkActionAsSeenRequest,
+  async markAllAs(
+    messageMarkAsRequestDto: components.MessageMarkAsRequestDto,
+    subscriberId: string,
+    idempotencyKey?: string | undefined,
     options?: RequestOptions,
-  ): Promise<operations.SubscribersV1ControllerMarkActionAsSeenResponse> {
-    return unwrapAsync(subscribersMessagesUpdateAsSeen(
+  ): Promise<operations.SubscribersV1ControllerMarkMessagesAsResponse> {
+    return unwrapAsync(subscribersMessagesMarkAllAs(
       this,
-      request,
+      messageMarkAsRequestDto,
+      subscriberId,
+      idempotencyKey,
       options,
     ));
   }

@@ -1,26 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import {
-  IntegrationEntity,
-  IntegrationRepository,
-  TenantEntity,
-  TenantRepository,
-} from '@novu/dal';
-import { CHANNELS_WITH_PRIMARY } from '@novu/shared';
-
-import { SelectIntegrationCommand } from './select-integration.command';
-import {
-  ConditionsFilter,
-  ConditionsFilterCommand,
-} from '../conditions-filter';
-import { CachedQuery } from '../../services/cache/interceptors/cached-query.interceptor';
-import { buildIntegrationKey } from '../../services/cache/key-builders/queries';
+import { IntegrationEntity, IntegrationRepository, TenantEntity, TenantRepository } from '@novu/dal';
+import { CHANNELS_WITH_PRIMARY, FeatureFlagsKeysEnum } from '@novu/shared';
+import { Instrument, InstrumentUsecase } from '../../instrumentation';
+import { FeatureFlagsService } from '../../services/feature-flags';
+import { ConditionsFilter, ConditionsFilterCommand } from '../conditions-filter';
 import { GetDecryptedIntegrations } from '../get-decrypted-integrations';
-import {
-  NormalizeVariables,
-  NormalizeVariablesCommand,
-} from '../normalize-variables';
-
-const LOG_CONTEXT = 'SelectIntegration';
+import { NormalizeVariables, NormalizeVariablesCommand } from '../normalize-variables';
+import { SelectIntegrationCommand } from './select-integration.command';
 
 @Injectable()
 export class SelectIntegration {
@@ -29,23 +15,20 @@ export class SelectIntegration {
     protected conditionsFilter: ConditionsFilter,
     private tenantRepository: TenantRepository,
     private normalizeVariablesUsecase: NormalizeVariables,
+    private featureFlagsService: FeatureFlagsService
   ) {}
 
-  @CachedQuery({
-    builder: ({ organizationId, ...command }: SelectIntegrationCommand) =>
-      buildIntegrationKey().cache({
-        _organizationId: organizationId,
-        ...command,
-      }),
-  })
-  async execute(
-    command: SelectIntegrationCommand,
-  ): Promise<IntegrationEntity | undefined> {
-    let integration: IntegrationEntity | null =
-      await this.getPrimaryIntegration(command);
+  @InstrumentUsecase()
+  async execute(command: SelectIntegrationCommand): Promise<IntegrationEntity | undefined> {
+    const isCrossEnvironmentIntegrationEnabled = await this.isCrossEnvironmentIntegrationEnabled(command);
+
+    let integration: IntegrationEntity | null = await this.getPrimaryIntegration(
+      command,
+      isCrossEnvironmentIntegrationEnabled
+    );
 
     if (!command.identifier && command.filterData.tenant && command.userId) {
-      const query = this.getIntegrationQuery(command);
+      const query = this.getIntegrationQuery(command, isCrossEnvironmentIntegrationEnabled);
 
       const integrations = await this.integrationRepository.find(query);
 
@@ -63,10 +46,7 @@ export class SelectIntegration {
       }
 
       for (const currentIntegration of integrations) {
-        if (
-          !currentIntegration.conditions ||
-          currentIntegration.conditions.length === 0
-        ) {
+        if (!currentIntegration.conditions || currentIntegration.conditions.length === 0) {
           continue;
         }
 
@@ -79,7 +59,7 @@ export class SelectIntegration {
             variables: {
               tenant,
             },
-          }),
+          })
         );
 
         const { passed } = await this.conditionsFilter.filter(
@@ -89,7 +69,7 @@ export class SelectIntegration {
             organizationId: command.organizationId,
             userId: command.userId,
             variables,
-          }),
+          })
         );
 
         if (passed) {
@@ -106,35 +86,49 @@ export class SelectIntegration {
     return GetDecryptedIntegrations.getDecryptedCredentials(integration);
   }
 
+  @Instrument()
   private async getPrimaryIntegration(
     command: SelectIntegrationCommand,
+    isCrossEnvironmentIntegrationEnabled: boolean
   ): Promise<IntegrationEntity | null> {
-    const isChannelSupportsPrimary = CHANNELS_WITH_PRIMARY.includes(
-      command.channelType,
-    );
+    const isChannelSupportsPrimary = CHANNELS_WITH_PRIMARY.includes(command.channelType);
 
-    const query: Partial<IntegrationEntity> & { _organizationId: string } =
-      command.identifier
-        ? {
-            _organizationId: command.organizationId,
-            channel: command.channelType,
-            identifier: command.identifier,
-            active: true,
-          }
-        : this.getIntegrationQuery(command, isChannelSupportsPrimary);
+    const query: Partial<IntegrationEntity> & { _organizationId: string } = command.identifier
+      ? {
+          _organizationId: command.organizationId,
+          ...(!isCrossEnvironmentIntegrationEnabled && {
+            _environmentId: command.environmentId,
+          }),
+          channel: command.channelType,
+          identifier: command.identifier,
+          active: true,
+        }
+      : this.getIntegrationQuery(command, isCrossEnvironmentIntegrationEnabled, isChannelSupportsPrimary);
 
     return await this.integrationRepository.findOne(query, undefined, {
       query: { sort: { createdAt: -1 } },
     });
   }
 
+  private async isCrossEnvironmentIntegrationEnabled(command: SelectIntegrationCommand): Promise<boolean> {
+    return this.featureFlagsService.getFlag({
+      key: FeatureFlagsKeysEnum.IS_CROSS_ENVIRONMENT_INTEGRATION_ENABLED,
+      defaultValue: false,
+      organization: { _id: String(command.organizationId) },
+      environment: { _id: String(command.environmentId) },
+    });
+  }
+
   private getIntegrationQuery(
     command: SelectIntegrationCommand,
-    isChannelSupportsPrimary = false,
+    isCrossEnvironmentIntegrationEnabled: boolean,
+    isChannelSupportsPrimary = false
   ) {
     const query: Partial<IntegrationEntity> & { _organizationId: string } = {
       _organizationId: command.organizationId,
-      _environmentId: command.environmentId,
+      ...(!isCrossEnvironmentIntegrationEnabled && {
+        _environmentId: command.environmentId,
+      }),
       channel: command.channelType,
       active: true,
     };

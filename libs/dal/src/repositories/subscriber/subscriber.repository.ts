@@ -1,12 +1,11 @@
-import { FilterQuery } from 'mongoose';
-import { DirectionEnum, EnvironmentId, ISubscribersDefine, OrganizationId, SubscriberDto } from '@novu/shared';
+import { DirectionEnum, EnvironmentId, ISubscribersDefine, OrganizationId } from '@novu/shared';
+import { DalException } from '../../shared';
+import type { EnforceEnvOrOrgIds } from '../../types';
+import { BaseRepository } from '../base-repository';
+import { BulkCreateSubscriberEntity } from './bulk.create.subscriber.entity';
 import { SubscriberDBModel, SubscriberEntity } from './subscriber.entity';
 import { Subscriber } from './subscriber.schema';
 import { IExternalSubscribersEntity } from './types';
-import { BaseRepository } from '../base-repository';
-import { DalException } from '../../shared';
-import type { EnforceEnvOrOrgIds } from '../../types';
-import { BulkCreateSubscriberEntity } from './bulk.create.subscriber.entity';
 
 export class SubscriberRepository extends BaseRepository<SubscriberDBModel, SubscriberEntity, EnforceEnvOrOrgIds> {
   constructor() {
@@ -16,15 +15,75 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
   async findBySubscriberId(
     environmentId: string,
     subscriberId: string,
-    secondaryRead = false
+    secondaryRead = false,
+    select?: string
   ): Promise<SubscriberEntity | null> {
     return await this.findOne(
       {
         _environmentId: environmentId,
         subscriberId,
       },
-      undefined,
+      select,
       { readPreference: secondaryRead ? 'secondaryPreferred' : 'primary' }
+    );
+  }
+
+  async findByPhone(
+    environmentId: string,
+    organizationId: string,
+    phoneCandidates: string[],
+    digitFlexibleRegexSource?: string | null
+  ): Promise<SubscriberEntity[]> {
+    if (phoneCandidates.length === 0) {
+      return [];
+    }
+
+    // Exact `$in` covers canonical E.164 / Meta digit forms. Optional
+    // digit-flexible regex also matches stored phones with spaces, dashes, or
+    // parentheses (e.g. "+1 (555) 123-4567") so open-access WhatsApp does not
+    // miss a known subscriber or provision a duplicate phantom for the same number.
+    const phoneFilter = digitFlexibleRegexSource
+      ? {
+          $or: [{ phone: { $in: phoneCandidates } }, { phone: { $regex: digitFlexibleRegexSource } }],
+        }
+      : { phone: { $in: phoneCandidates } };
+
+    // Projects `_id` and `data` alongside `subscriberId` so the agent WhatsApp
+    // resolver can (a) map the external id to the Mongo `_id` needed to repoint
+    // MCP / tool-trust rows and (b) read the `__novu_source` provenance marker
+    // to tell an auto-provisioned "phantom" apart from a customer-created
+    // subscriber during the adoption merge. Limit raised from 2 to comfortably
+    // capture a real subscriber plus any phantom(s) sharing the phone.
+    return this.find(
+      {
+        _environmentId: environmentId,
+        _organizationId: organizationId,
+        ...phoneFilter,
+      },
+      '_id subscriberId phone data',
+      { limit: 10 }
+    );
+  }
+
+  async findByEmail(environmentId: string, organizationId: string, email: string): Promise<SubscriberEntity[]> {
+    if (!email) {
+      return [];
+    }
+
+    // Projects `_id` and `data` alongside `subscriberId` so the agent email
+    // resolver can (a) map the external id to the Mongo `_id` needed to repoint
+    // MCP / tool-trust rows and (b) read the `__novu_source` provenance marker
+    // to tell an auto-provisioned "phantom" apart from a customer-created
+    // subscriber during the adoption merge. Limit raised from 2 to comfortably
+    // capture a real subscriber plus any phantom(s) sharing the address.
+    return this.find(
+      {
+        _environmentId: environmentId,
+        _organizationId: organizationId,
+        email,
+      },
+      '_id subscriberId email data',
+      { limit: 10 }
     );
   }
 
@@ -34,18 +93,23 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
     organizationId: OrganizationId
   ): Promise<BulkCreateSubscriberEntity> {
     const bulkWriteOps = subscribers.map((subscriber) => {
-      const { subscriberId, ...rest } = subscriber;
+      const updatableFields = pickUpdatableSubscriberFields(subscriber);
 
       return {
         updateOne: {
-          filter: { subscriberId, _environmentId: environmentId, _organizationId: organizationId },
-          update: { $set: { ...rest, deleted: false } },
+          filter: {
+            subscriberId: subscriber.subscriberId,
+            _environmentId: environmentId,
+            _organizationId: organizationId,
+          },
+          update: { $set: { ...updatableFields, deleted: false } },
           upsert: true,
         },
       };
     });
 
     let bulkResponse;
+    let writeErrors: Array<{ err: { index: number; errmsg: string; op?: { subscriberId?: string } } }> = [];
     try {
       bulkResponse = await this.bulkWrite(bulkWriteOps);
     } catch (e: unknown) {
@@ -54,12 +118,19 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
           throw new DalException(e.message);
         }
         bulkResponse = e.result;
+        writeErrors = e.writeErrors as Array<{
+          err: { index: number; errmsg: string; op?: { subscriberId?: string } };
+        }>;
       } else {
         throw new DalException('An unknown error occurred');
       }
     }
-    const created = bulkResponse.getUpsertedIds();
-    const writeErrors = bulkResponse.getWriteErrors();
+
+    const upsertedIds = bulkResponse.upsertedIds || {};
+    const created = Object.entries(upsertedIds).map(([index, _id]) => ({
+      index: parseInt(index, 10),
+      _id,
+    }));
 
     const indexes: number[] = [];
 
@@ -69,7 +140,7 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
       return mapToSubscriberObject(subscribers[inserted.index]?.subscriberId);
     });
 
-    let failed = [];
+    let failed: Array<{ message: string; subscriberId?: string }> = [];
     if (writeErrors.length > 0) {
       failed = writeErrors.map((error) => {
         indexes.push(error.err.index);
@@ -145,6 +216,9 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
         }
       );
     }
+    if (filters.length === 0) {
+      return [];
+    }
 
     return (
       await this.find(
@@ -173,7 +247,14 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
     phone?: string;
     subscriberId?: string;
     name?: string;
-  }): Promise<{ subscribers: SubscriberEntity[]; next: string | null; previous: string | null }> {
+    includeCursor?: boolean;
+  }): Promise<{
+    subscribers: SubscriberEntity[];
+    next: string | null;
+    previous: string | null;
+    totalCount: number;
+    totalCountCapped: boolean;
+  }> {
     if (query.before && query.after) {
       throw new DalException('Cannot specify both "before" and "after" cursors at the same time.');
     }
@@ -191,6 +272,8 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
           subscribers: [],
           next: null,
           previous: null,
+          totalCount: 0,
+          totalCountCapped: false,
         };
       }
     }
@@ -207,6 +290,7 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
       limit: query.limit,
       sortDirection: query.sortDirection,
       sortBy: query.sortBy,
+      includeCursor: query.includeCursor,
       query: {
         _environmentId: query.environmentId,
         _organizationId: query.organizationId,
@@ -225,10 +309,7 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
               },
             }),
             ...(query.subscriberId && {
-              subscriberId: {
-                $regex: regExpEscape(query.subscriberId),
-                $options: 'i',
-              },
+              subscriberId: query.subscriberId,
             }),
             ...(query.name && {
               $expr: {
@@ -254,12 +335,37 @@ export class SubscriberRepository extends BaseRepository<SubscriberDBModel, Subs
       subscribers: pagination.data,
       next: pagination.next,
       previous: pagination.previous,
+      totalCount: pagination.totalCount,
+      totalCountCapped: pagination.totalCountCapped,
     };
   }
 }
 
 function mapToSubscriberObject(subscriberId: string) {
   return { subscriberId };
+}
+
+const UPDATABLE_SUBSCRIBER_FIELDS: readonly (keyof ISubscribersDefine)[] = [
+  'firstName',
+  'lastName',
+  'email',
+  'phone',
+  'avatar',
+  'locale',
+  'data',
+  'channels',
+  'timezone',
+];
+
+function pickUpdatableSubscriberFields(subscriber: ISubscribersDefine): Partial<ISubscribersDefine> {
+  const result: Partial<ISubscribersDefine> = {};
+  for (const field of UPDATABLE_SUBSCRIBER_FIELDS) {
+    if (field in subscriber) {
+      (result as Record<string, unknown>)[field] = subscriber[field];
+    }
+  }
+
+  return result;
 }
 
 function regExpEscape(literalString: string): string {

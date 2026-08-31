@@ -1,18 +1,18 @@
+import { EmailProviderIdEnum } from '@novu/shared';
 import {
   ChannelTypeEnum,
+  CheckIntegrationResponseEnum,
+  ICheckIntegrationResponse,
+  IEmailEventBody,
   IEmailOptions,
   IEmailProvider,
   ISendMessageSuccessResponse,
-  ICheckIntegrationResponse,
-  CheckIntegrationResponseEnum,
-  IEmailEventBody,
 } from '@novu/stateless';
+// biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error breaks the ESM build (TS2578) because emailjs only errors under CJS module resolution
 // @ts-ignore CJS importing an ESM module, this fails only during the CJS build
-import type { Message, SMTPClient, MessageAttachment } from 'emailjs';
-import { EmailProviderIdEnum } from '@novu/shared';
-import { IEmailJsConfig } from './emailjs.config';
+import type { Message, MessageAttachment, SMTPClient } from 'emailjs';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
-import { WithPassthrough } from '../../../utils/types';
+import { IEmailJsConfig } from './emailjs.config';
 
 export class EmailJsProvider extends BaseProvider implements IEmailProvider {
   protected casing: CasingEnum = CasingEnum.KEBAB_CASE;
@@ -30,6 +30,7 @@ export class EmailJsProvider extends BaseProvider implements IEmailProvider {
     await this.ensureClientInitialized();
 
     const headers: Message['header'] = {
+      ...emailOptions.headers,
       from: emailOptions.from || this.config.from,
       to: emailOptions.to,
       subject: emailOptions.subject,
@@ -86,6 +87,7 @@ export class EmailJsProvider extends BaseProvider implements IEmailProvider {
             name: attachment.name,
             data: attachment.file.toString('base64'),
             type: attachment.mime,
+            inline: Boolean(attachment.cid),
           };
         })
       : [];

@@ -1,37 +1,48 @@
+import type { AgentEventEnvelope } from '@novu/agent-event-protocol';
 import io, { Socket as SocketIO } from 'socket.io-client';
 import { InboxService } from '../api';
 import { BaseModule } from '../base-module';
-
 import {
+  WebChatAgentEvent,
   NotificationReceivedEvent,
-  NotificationUnseenEvent,
   NotificationUnreadEvent,
+  NotificationUnseenEvent,
   NovuEventEmitter,
   SocketEventNames,
 } from '../event-emitter';
 import { Notification } from '../notifications';
 import {
   ActionTypeEnum,
-  NotificationActionStatus,
   InboxNotification,
+  NotificationActionStatus,
+  Result,
   Session,
   Subscriber,
   TODO,
   WebSocketEvent,
 } from '../types';
+import { NovuError } from '../utils/errors';
+import { sanitizeInAppRedirect } from '../utils/in-app-redirect-url';
+import type { BaseSocketInterface } from './base-socket';
 
 const PRODUCTION_SOCKET_URL = 'https://ws.novu.co';
 const NOTIFICATION_RECEIVED: NotificationReceivedEvent = 'notifications.notification_received';
 const UNSEEN_COUNT_CHANGED: NotificationUnseenEvent = 'notifications.unseen_count_changed';
 const UNREAD_COUNT_CHANGED: NotificationUnreadEvent = 'notifications.unread_count_changed';
+const WEB_CHAT_AGENT_EVENT: WebChatAgentEvent = 'web_chat.agent_event';
 
 const mapToNotification = ({
   _id,
+  transactionId,
   content,
   read,
+  seen,
   archived,
+  snoozedUntil,
+  deliveredAt,
   createdAt,
   lastReadDate,
+  firstSeenDate,
   archivedAt,
   channel,
   subscriber,
@@ -40,13 +51,20 @@ const mapToNotification = ({
   cta,
   tags,
   data,
+  workflow,
+  severity,
 }: TODO): InboxNotification => {
   const to: Subscriber = {
-    id: subscriber?._id ?? '',
+    id: subscriber?._id,
+    subscriberId: subscriber?.subscriberId,
     firstName: subscriber?.firstName,
     lastName: subscriber?.lastName,
     avatar: subscriber?.avatar,
-    subscriberId: subscriber?.subscriberId ?? '',
+    locale: subscriber?.locale,
+    data: subscriber?.data,
+    timezone: subscriber?.timezone,
+    email: subscriber?.email,
+    phone: subscriber?.phone,
   };
   const primaryCta = cta.action?.buttons?.find((button: any) => button.type === ActionTypeEnum.PRIMARY);
   const secondaryCta = cta.action?.buttons?.find((button: any) => button.type === ActionTypeEnum.SECONDARY);
@@ -55,59 +73,59 @@ const mapToNotification = ({
 
   return {
     id: _id,
+    transactionId,
     subject,
     body: content as string,
     to,
     isRead: read,
+    isSeen: seen,
     isArchived: archived,
+    isSnoozed: !!snoozedUntil,
+    ...(deliveredAt && {
+      deliveredAt,
+    }),
+    ...(snoozedUntil && {
+      snoozedUntil,
+    }),
     createdAt,
     readAt: lastReadDate,
+    firstSeenAt: firstSeenDate,
     archivedAt,
     avatar,
     primaryAction: primaryCta && {
       label: primaryCta.content,
       isCompleted: actionType === ActionTypeEnum.PRIMARY && actionStatus === NotificationActionStatus.DONE,
-      redirect: primaryCta.url
-        ? {
-            target: primaryCta.target,
-            url: primaryCta.url,
-          }
-        : undefined,
+      redirect: sanitizeInAppRedirect(primaryCta.url, primaryCta.target),
     },
     secondaryAction: secondaryCta && {
       label: secondaryCta.content,
       isCompleted: actionType === ActionTypeEnum.SECONDARY && actionStatus === NotificationActionStatus.DONE,
-      redirect: secondaryCta.url
-        ? {
-            target: secondaryCta.target,
-            url: secondaryCta.url,
-          }
-        : undefined,
+      redirect: sanitizeInAppRedirect(secondaryCta.url, secondaryCta.target),
     },
     channelType: channel,
     tags,
-    redirect: cta.data?.url
-      ? {
-          url: cta.data.url,
-          target: cta.data.target,
-        }
-      : undefined,
+    redirect: sanitizeInAppRedirect(cta.data?.url, cta.data?.target),
     data,
+    workflow,
+    severity,
   };
 };
 
-export class Socket extends BaseModule {
+export class Socket extends BaseModule implements BaseSocketInterface {
   #token: string;
   #emitter: NovuEventEmitter;
   #socketIo: SocketIO | undefined;
   #socketUrl: string;
+  #socketOptions?: Record<string, unknown>;
 
   constructor({
     socketUrl,
+    socketOptions,
     inboxServiceInstance,
     eventEmitterInstance,
   }: {
     socketUrl?: string;
+    socketOptions?: Record<string, unknown>;
     inboxServiceInstance: InboxService;
     eventEmitterInstance: NovuEventEmitter;
   }) {
@@ -117,6 +135,7 @@ export class Socket extends BaseModule {
     });
     this.#emitter = eventEmitterInstance;
     this.#socketUrl = socketUrl ?? PRODUCTION_SOCKET_URL;
+    this.#socketOptions = socketOptions;
   }
 
   protected onSessionSuccess({ token }: Session): void {
@@ -135,15 +154,20 @@ export class Socket extends BaseModule {
     });
   };
 
-  #unreadCountChanged = ({ unreadCount }: { unreadCount: number }) => {
+  #unreadCountChanged = ({ counts }: { counts: { total: number; severity: Record<string, number> } }) => {
     this.#emitter.emit(UNREAD_COUNT_CHANGED, {
-      result: unreadCount,
+      result: counts,
+    });
+  };
+
+  #agentEvent = (envelope: AgentEventEnvelope) => {
+    this.#emitter.emit(WEB_CHAT_AGENT_EVENT, {
+      result: envelope,
     });
   };
 
   async #initializeSocket(): Promise<void> {
-    // eslint-disable-next-line no-extra-boolean-cast
-    if (!!this.#socketIo) {
+    if (this.#socketIo) {
       return;
     }
 
@@ -156,6 +180,7 @@ export class Socket extends BaseModule {
       query: {
         token: `${this.#token}`,
       },
+      ...(this.#socketOptions ?? {}),
     });
 
     this.#socketIo.on('connect', () => {
@@ -169,29 +194,52 @@ export class Socket extends BaseModule {
     this.#socketIo?.on(WebSocketEvent.RECEIVED, this.#notificationReceived);
     this.#socketIo?.on(WebSocketEvent.UNSEEN, this.#unseenCountChanged);
     this.#socketIo?.on(WebSocketEvent.UNREAD, this.#unreadCountChanged);
+    this.#socketIo?.on(WebSocketEvent.AGENT_EVENT, this.#agentEvent);
+  }
+
+  async #handleConnectSocket(): Result<void> {
+    try {
+      await this.#initializeSocket();
+
+      return {};
+    } catch (error) {
+      return { error: new NovuError('Failed to initialize the socket', error) };
+    }
+  }
+
+  async #handleDisconnectSocket(): Result<void> {
+    try {
+      this.#socketIo?.disconnect();
+      this.#socketIo = undefined;
+
+      return {};
+    } catch (error) {
+      return { error: new NovuError('Failed to disconnect from the socket', error) };
+    }
   }
 
   isSocketEvent(eventName: string): eventName is SocketEventNames {
     return (
-      eventName === NOTIFICATION_RECEIVED || eventName === UNSEEN_COUNT_CHANGED || eventName === UNREAD_COUNT_CHANGED
+      eventName === NOTIFICATION_RECEIVED ||
+      eventName === UNSEEN_COUNT_CHANGED ||
+      eventName === UNREAD_COUNT_CHANGED ||
+      eventName === WEB_CHAT_AGENT_EVENT
     );
   }
 
-  initialize(): void {
+  async connect(): Result<void> {
     if (this.#token) {
-      this.#initializeSocket().catch((error) => {
-        console.error(error);
-      });
-
-      return;
+      return this.#handleConnectSocket();
     }
 
-    this.callWithSession(async () => {
-      this.#initializeSocket().catch((error) => {
-        console.error(error);
-      });
+    return this.callWithSession(this.#handleConnectSocket.bind(this));
+  }
 
-      return {};
-    });
+  async disconnect(): Result<void> {
+    if (this.#socketIo) {
+      return this.#handleDisconnectSocket();
+    }
+
+    return this.callWithSession(this.#handleDisconnectSocket.bind(this));
   }
 }

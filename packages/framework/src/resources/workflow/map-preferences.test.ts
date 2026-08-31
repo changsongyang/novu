@@ -1,4 +1,4 @@
-import { it, describe, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { mapPreferences } from './map-preferences';
 
 describe('mapPreferences', () => {
@@ -37,6 +37,7 @@ describe('mapPreferences', () => {
         push: { enabled: true },
         inApp: { enabled: true },
         chat: { enabled: true },
+        tool: { enabled: true },
       },
     });
 
@@ -48,6 +49,21 @@ describe('mapPreferences', () => {
         push: { enabled: true },
         in_app: { enabled: true },
         chat: { enabled: true },
+        tool: { enabled: true },
+      },
+    });
+  });
+
+  it('should map tool workflow channel to ChannelTypeEnum.TOOL', () => {
+    const result = mapPreferences({
+      channels: {
+        tool: { enabled: false },
+      },
+    });
+
+    expect(result).to.deep.equal({
+      channels: {
+        tool: { enabled: false },
       },
     });
   });

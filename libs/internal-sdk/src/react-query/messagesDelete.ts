@@ -11,6 +11,17 @@ import { NovuCore } from "../core.js";
 import { messagesDelete } from "../funcs/messagesDelete.js";
 import { combineSignals } from "../lib/primitives.js";
 import { RequestOptions } from "../lib/sdks.js";
+import {
+  ConnectionError,
+  InvalidRequestError,
+  RequestAbortedError,
+  RequestTimeoutError,
+  UnexpectedClientError,
+} from "../models/errors/httpclienterrors.js";
+import * as errors from "../models/errors/index.js";
+import { NovuError } from "../models/errors/novuerror.js";
+import { ResponseValidationError } from "../models/errors/responsevalidationerror.js";
+import { SDKValidationError } from "../models/errors/sdkvalidationerror.js";
 import * as operations from "../models/operations/index.js";
 import { unwrapAsync } from "../types/fp.js";
 import { useNovuContext } from "./_context.js";
@@ -25,21 +36,34 @@ export type MessagesDeleteMutationVariables = {
 export type MessagesDeleteMutationData =
   operations.MessagesControllerDeleteMessageResponse;
 
+export type MessagesDeleteMutationError =
+  | errors.ErrorDto
+  | errors.ValidationErrorDto
+  | NovuError
+  | ResponseValidationError
+  | ConnectionError
+  | RequestAbortedError
+  | RequestTimeoutError
+  | InvalidRequestError
+  | UnexpectedClientError
+  | SDKValidationError;
+
 /**
- * Delete message
+ * Delete a message
  *
  * @remarks
- * Deletes a message entity from the Novu platform
+ * Delete a message entity from the Novu platform by **messageId**.
+ *     This action is irreversible. **messageId** is required and of mongodbId type.
  */
 export function useMessagesDeleteMutation(
   options?: MutationHookOptions<
     MessagesDeleteMutationData,
-    Error,
+    MessagesDeleteMutationError,
     MessagesDeleteMutationVariables
   >,
 ): UseMutationResult<
   MessagesDeleteMutationData,
-  Error,
+  MessagesDeleteMutationError,
   MessagesDeleteMutationVariables
 > {
   const client = useNovuContext();

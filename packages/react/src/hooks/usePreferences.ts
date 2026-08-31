@@ -1,14 +1,18 @@
-import { NovuError, Preference } from '@novu/js';
+import { NovuError, Preference, SeverityLevelEnum, WorkflowCriticalityEnum } from '@novu/js';
 import { useEffect, useState } from 'react';
 import { useNovu } from './NovuProvider';
 
-type UsePreferencesProps = {
-  filter?: { tags?: string[] };
+export type UsePreferencesProps = {
+  filter?: {
+    tags?: string[];
+    severity?: SeverityLevelEnum | SeverityLevelEnum[];
+    criticality?: WorkflowCriticalityEnum;
+  };
   onSuccess?: (data: Preference[]) => void;
   onError?: (error: NovuError) => void;
 };
 
-type UsePreferencesResult = {
+export type UsePreferencesResult = {
   preferences?: Preference[];
   error?: NovuError;
   isLoading: boolean; // initial loading
@@ -51,8 +55,9 @@ export const usePreferences = (props?: UsePreferencesProps): UsePreferencesResul
     if (response.error) {
       setError(response.error);
       onError?.(response.error);
-    } else {
-      onSuccess?.(response.data!);
+    } else if (response.data) {
+      setData(response.data);
+      onSuccess?.(response.data);
     }
     setIsLoading(false);
     setIsFetching(false);

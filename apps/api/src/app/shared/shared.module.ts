@@ -1,10 +1,48 @@
-/* eslint-disable global-require */
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import {
+  analyticsService,
+  CacheServiceHealthIndicator,
+  ComputeJobWaitDurationService,
+  CreateExecutionDetails,
+  cacheService,
+  clickHouseService,
+  createNestLoggingModuleOptions,
+  DalServiceHealthIndicator,
+  DeliveryTrendCountsRepository,
+  ExecuteBridgeRequest,
+  ExecuteFrameworkRequest,
+  ExecuteStepResolverRequest,
+  featureFlagsService,
+  GetDecryptedSecretKey,
+  HttpClientService,
+  InMemoryLRUCacheService,
+  InvalidateCacheService,
+  LoggerModule,
+  NotificationPayloadService,
+  QueuesModule,
+  RequestLogRepository,
+  SafeOutboundHttpService,
+  StepRunRepository,
+  storageService,
+  TraceLogRepository,
+  TraceRollupRepository,
+  WorkflowRunCountRepository,
+  WorkflowRunRepository,
+} from '@novu/application-generic';
+import {
+  AgentIntegrationRepository,
+  AgentRepository,
   ChangeRepository,
+  CommunityMemberRepository,
+  CommunityOrganizationRepository,
+  CommunityUserRepository,
   ControlValuesRepository,
   DalService,
+  DomainRepository,
+  DomainRouteRepository,
   EnvironmentRepository,
+  EnvironmentVariableRepository,
   ExecutionDetailsRepository,
   FeedRepository,
   IntegrationRepository,
@@ -24,31 +62,8 @@ import {
   TopicSubscribersRepository,
   UserRepository,
   WorkflowOverrideRepository,
-  CommunityUserRepository,
-  CommunityMemberRepository,
-  CommunityOrganizationRepository,
 } from '@novu/dal';
-import {
-  analyticsService,
-  cacheService,
-  CacheServiceHealthIndicator,
-  ComputeJobWaitDurationService,
-  CreateExecutionDetails,
-  createNestLoggingModuleOptions,
-  DalServiceHealthIndicator,
-  distributedLockService,
-  ExecuteBridgeRequest,
-  ExecutionLogRoute,
-  featureFlagsService,
-  GetDecryptedSecretKey,
-  InvalidateCacheService,
-  LoggerModule,
-  QueuesModule,
-  storageService,
-} from '@novu/application-generic';
-
 import { isClerkEnabled, JobTopicNameEnum } from '@novu/shared';
-import { JwtModule } from '@nestjs/jwt';
 import packageJson from '../../../package.json';
 
 function getDynamicAuthProviders() {
@@ -79,6 +94,7 @@ function getDynamicAuthProviders() {
 const DAL_MODELS = [
   UserRepository,
   OrganizationRepository,
+  CommunityOrganizationRepository,
   EnvironmentRepository,
   ExecutionDetailsRepository,
   NotificationTemplateRepository,
@@ -99,6 +115,11 @@ const DAL_MODELS = [
   WorkflowOverrideRepository,
   ControlValuesRepository,
   PreferencesRepository,
+  EnvironmentVariableRepository,
+  AgentRepository,
+  AgentIntegrationRepository,
+  DomainRepository,
+  DomainRouteRepository,
 ];
 
 const dalService = {
@@ -111,6 +132,20 @@ const dalService = {
   },
 };
 
+const ANALYTICS_PROVIDERS = [
+  // Repositories
+  RequestLogRepository,
+  TraceLogRepository,
+  StepRunRepository,
+  WorkflowRunRepository,
+  WorkflowRunCountRepository,
+  TraceRollupRepository,
+  DeliveryTrendCountsRepository,
+
+  // Services
+  clickHouseService,
+];
+
 const PROVIDERS = [
   analyticsService,
   cacheService,
@@ -118,23 +153,34 @@ const PROVIDERS = [
   ComputeJobWaitDurationService,
   dalService,
   DalServiceHealthIndicator,
-  distributedLockService,
   featureFlagsService,
+  InMemoryLRUCacheService,
   InvalidateCacheService,
+  NotificationPayloadService,
   storageService,
   ...DAL_MODELS,
-  ExecutionLogRoute,
   CreateExecutionDetails,
   ExecuteBridgeRequest,
+  ExecuteFrameworkRequest,
+  ExecuteStepResolverRequest,
   GetDecryptedSecretKey,
+  HttpClientService,
+  SafeOutboundHttpService,
+  ...ANALYTICS_PROVIDERS,
 ];
 
 const IMPORTS = [
-  QueuesModule.forRoot([JobTopicNameEnum.WEB_SOCKETS, JobTopicNameEnum.WORKFLOW, JobTopicNameEnum.INBOUND_PARSE_MAIL]),
+  QueuesModule.forRoot([
+    JobTopicNameEnum.WEB_SOCKETS,
+    JobTopicNameEnum.WORKFLOW,
+    JobTopicNameEnum.INBOUND_PARSE_MAIL,
+    JobTopicNameEnum.STANDARD,
+  ]),
   LoggerModule.forRoot(
     createNestLoggingModuleOptions({
       serviceName: packageJson.name,
       version: packageJson.version,
+      silent: !!process.env.CI,
     })
   ),
 ];

@@ -1,16 +1,18 @@
-import { FilterQuery } from 'mongoose';
+import { ClientSession, FilterQuery } from 'mongoose';
 import { SoftDeleteModel } from 'mongoose-delete';
-import { DalException } from '../../shared';
 import type { EnforceEnvOrOrgIds } from '../../types/enforce';
 import { BaseRepository } from '../base-repository';
 import { MessageTemplateDBModel, MessageTemplateEntity } from './message-template.entity';
 import { MessageTemplate } from './message-template.schema';
 
 type MessageTemplateQuery = FilterQuery<MessageTemplateDBModel>;
-// eslint-disable-next-line @typescript-eslint/naming-convention
 export interface DeleteMsgByIdQuery {
   _id: string;
   _environmentId: string;
+}
+
+export interface RepositoryOptions {
+  session?: ClientSession | null;
 }
 export class MessageTemplateRepository extends BaseRepository<
   MessageTemplateDBModel,
@@ -42,39 +44,37 @@ export class MessageTemplateRepository extends BaseRepository<
   }
 
   async delete(query: MessageTemplateQuery) {
-    const messageTemplate = await this.findOne({
+    return await this.messageTemplate.delete({
+      _id: query._id,
+      _environmentId: query._environmentId,
+    });
+  }
+
+  async deleteById(query: DeleteMsgByIdQuery, options: RepositoryOptions = {}) {
+    const { session } = options;
+
+    const deleteQuery = this.messageTemplate.delete({
       _id: query._id,
       _environmentId: query._environmentId,
     });
 
-    if (!messageTemplate) {
-      throw new DalException(`Could not find a message template with id ${query._id}`);
+    if (session) {
+      deleteQuery.session(session);
     }
 
-    return await this.messageTemplate.delete({
-      _id: messageTemplate._id,
-      _environmentId: messageTemplate._environmentId,
-    });
+    return await deleteQuery;
   }
 
-  async deleteById(query: DeleteMsgByIdQuery) {
-    const messageTemplate = await this.findOne({
-      _id: query._id,
-      _environmentId: query._environmentId,
-    });
+  async findDeleted(query: MessageTemplateQuery, options: RepositoryOptions = {}): Promise<MessageTemplateEntity> {
+    const { session } = options;
 
-    if (!messageTemplate) {
-      throw new DalException(`Could not find a message template with id ${query._id}`);
+    const findQuery = this.messageTemplate.findDeleted(query);
+
+    if (session) {
+      findQuery.session(session);
     }
 
-    return await this.messageTemplate.delete({
-      _id: messageTemplate._id,
-      _environmentId: messageTemplate._environmentId,
-    });
-  }
-
-  async findDeleted(query: MessageTemplateQuery): Promise<MessageTemplateEntity> {
-    const res: MessageTemplateEntity = await this.messageTemplate.findDeleted(query);
+    const res: MessageTemplateEntity = await findQuery;
 
     return this.mapEntity(res);
   }

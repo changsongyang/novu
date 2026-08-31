@@ -14,8 +14,6 @@
  *
  */
 
-/* eslint-disable @typescript-eslint/naming-convention */
-
 export interface IResponseError {
   error: string;
   message: string;
@@ -35,6 +33,7 @@ export enum ChannelTypeEnum {
   SMS = 'sms',
   CHAT = 'chat',
   PUSH = 'push',
+  TOOL = 'tool',
 }
 
 export interface IAttachmentOptions {
@@ -83,8 +82,9 @@ export interface IChannelCredentials {
 }
 
 export interface ITopic {
-  type: 'topic';
+  type: 'Topic';
   topicKey: string;
+  exclude?: string[];
 }
 
 export type TriggerRecipientsPayload = string | ISubscriberPayload | ITopic | ISubscriberPayload[] | ITopic[];
@@ -101,6 +101,7 @@ export enum TriggerEventStatusEnum {
 }
 
 export enum EmailProviderIdEnum {
+  Anypost = 'anypost',
   EmailJS = 'emailjs',
   Mailgun = 'mailgun',
   Mailjet = 'mailjet',
@@ -156,12 +157,20 @@ export enum SmsProviderIdEnum {
   BrevoSms = 'brevo-sms',
   EazySms = 'eazy-sms',
   Mobishastra = 'mobishastra',
+  AfroSms = 'afro-message',
+  Unifonic = 'unifonic',
+  Smsmode = 'smsmode',
+  IMedia = 'imedia',
+  Sinch = 'sinch',
+  ISendProSms = 'isendpro-sms',
+  RuachSms = 'ruach-sms',
 }
 
 export enum ChatProviderIdEnum {
   Slack = 'slack',
   Discord = 'discord',
   MsTeams = 'msteams',
+  WebexMessaging = 'webex-messaging',
   Mattermost = 'mattermost',
   Ryver = 'ryver',
   Zulip = 'zulip',
@@ -169,6 +178,12 @@ export enum ChatProviderIdEnum {
   GetStream = 'getstream',
   RocketChat = 'rocket-chat',
   WhatsAppBusiness = 'whatsapp-business',
+  Line = 'line',
+  ChatWebhook = 'chat-webhook',
+  Novu = 'novu-slack',
+  Telegram = 'telegram',
+  Sendblue = 'sendblue',
+  NovuWebChat = 'novu-web-chat',
 }
 
 export enum PushProviderIdEnum {
@@ -179,10 +194,18 @@ export enum PushProviderIdEnum {
   Pushpad = 'pushpad',
   PushWebhook = 'push-webhook',
   PusherBeams = 'pusher-beams',
+  AppIO = 'appio',
 }
 
 export enum InAppProviderIdEnum {
   Novu = 'novu',
+}
+
+export enum ToolProviderIdEnum {
+  PagerDuty = 'pagerduty',
+  Opsgenie = 'opsgenie',
+  Grafana = 'grafana',
+  Webhook = 'tool-webhook',
 }
 
 /**

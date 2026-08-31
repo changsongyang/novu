@@ -1,14 +1,17 @@
+import { ENDPOINT_TYPES } from '@novu/stateless';
 import { expect, test } from 'vitest';
-import { axiosSpy } from '../../../utils/test/spy-axios';
+import { safeOutboundJsonSpy } from '../../../utils/test/spy-safe-outbound';
 import { RocketChatProvider } from './rocket-chat.provider';
+
+const rootUrl = 'https://rocketchat.example.com';
 
 test('should trigger rocket-chat library correctly', async () => {
   const mockConfig = {
     user: '<your-user>',
     token: '<your-auth-token>',
   };
-  const { mockPost } = axiosSpy({
-    data: {
+  const { mockSafeOutboundJsonRequest } = safeOutboundJsonSpy({
+    body: {
       message: {
         _id: 'id',
         ts: new Date().toISOString(),
@@ -18,27 +21,32 @@ test('should trigger rocket-chat library correctly', async () => {
   const provider = new RocketChatProvider(mockConfig);
 
   await provider.sendMessage({
-    webhookUrl: '<your-root-url>',
-    channel: '<your-channel>',
+    channelData: {
+      endpoint: {
+        url: rootUrl,
+        channel: '<your-channel>',
+      },
+      type: ENDPOINT_TYPES.WEBHOOK,
+      identifier: 'test-webhook-identifier',
+    },
     content: '<your-chat-message>',
   });
 
-  expect(mockPost).toHaveBeenCalledWith(
-    '<your-root-url>/api/v1/chat.sendMessage',
-    {
+  expect(mockSafeOutboundJsonRequest).toHaveBeenCalledWith({
+    url: `${rootUrl}/api/v1/chat.sendMessage`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-auth-token': '<your-auth-token>',
+      'x-user-id': '<your-user>',
+    },
+    body: {
       message: {
         msg: '<your-chat-message>',
         rid: '<your-channel>',
       },
     },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'x-auth-token': '<your-auth-token>',
-        'x-user-id': '<your-user>',
-      },
-    }
-  );
+  });
 });
 
 test('should trigger rocket-chat library correctly with _passthrough', async () => {
@@ -46,8 +54,8 @@ test('should trigger rocket-chat library correctly with _passthrough', async () 
     user: '<your-user>',
     token: '<your-auth-token>',
   };
-  const { mockPost } = axiosSpy({
-    data: {
+  const { mockSafeOutboundJsonRequest } = safeOutboundJsonSpy({
+    body: {
       message: {
         _id: 'id',
         ts: new Date().toISOString(),
@@ -58,8 +66,14 @@ test('should trigger rocket-chat library correctly with _passthrough', async () 
 
   await provider.sendMessage(
     {
-      webhookUrl: '<your-root-url>',
-      channel: '<your-channel>',
+      channelData: {
+        endpoint: {
+          url: rootUrl,
+          channel: '<your-channel>',
+        },
+        type: ENDPOINT_TYPES.WEBHOOK,
+        identifier: 'test-webhook-identifier',
+      },
       content: '<your-chat-message>',
     },
     {
@@ -76,20 +90,19 @@ test('should trigger rocket-chat library correctly with _passthrough', async () 
     }
   );
 
-  expect(mockPost).toHaveBeenCalledWith(
-    '<your-root-url>/api/v1/chat.sendMessage',
-    {
+  expect(mockSafeOutboundJsonRequest).toHaveBeenCalledWith({
+    url: `${rootUrl}/api/v1/chat.sendMessage`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-auth-token': '_passthrough',
+      'x-user-id': '<your-user>',
+    },
+    body: {
       message: {
         msg: '<your-chat-message>',
         rid: '_passthrough',
       },
     },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'x-auth-token': '_passthrough',
-        'x-user-id': '<your-user>',
-      },
-    }
-  );
+  });
 });

@@ -1,34 +1,25 @@
-import { AnalyticsService, GetSubscriberTemplatePreference, UpsertPreferences } from '@novu/application-generic';
-import { NotificationTemplateRepository, SubscriberRepository } from '@novu/dal';
-import { PreferenceLevelEnum } from '@novu/shared';
+import {
+  FeatureFlagsService,
+  GetSubscriberTemplatePreference,
+  GetWorkflowByIdsUseCase,
+  SendWebhookMessage,
+  UpsertPreferences,
+} from '@novu/application-generic';
+import { PreferencesRepository, SubscriberRepository, TopicSubscribersRepository } from '@novu/dal';
+import { PreferenceLevelEnum, SeverityLevelEnum } from '@novu/shared';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { AnalyticsEventsEnum } from '../../utils';
-import { UpdatePreferences } from './update-preferences.usecase';
 import {
   GetSubscriberGlobalPreference,
   GetSubscriberGlobalPreferenceCommand,
 } from '../../../subscribers/usecases/get-subscriber-global-preference';
+import { UpdatePreferences } from './update-preferences.usecase';
 
 const mockedSubscriber: any = {
   _id: '6447aff3d89122e250412c29',
   subscriberId: 'test-mockSubscriber',
   firstName: 'test',
   lastName: 'test',
-};
-
-const mockedSubscriberPreference: any = {
-  _id: '123',
-  subscriberId: 'test-mockSubscriber',
-  level: 'global',
-  enabled: true,
-  channels: {
-    email: true,
-    in_app: true,
-    sms: false,
-    push: false,
-    chat: true,
-  },
 };
 
 const mockedGlobalPreference: any = {
@@ -50,32 +41,42 @@ const mockedWorkflow: any = {
   critical: false,
   triggers: [{ identifier: 'test-trigger' }],
   tags: [],
+  data: undefined,
+  severity: SeverityLevelEnum.NONE,
 };
 
 describe('UpdatePreferences', () => {
   let updatePreferences: UpdatePreferences;
   let subscriberRepositoryMock: sinon.SinonStubbedInstance<SubscriberRepository>;
-  let analyticsServiceMock: sinon.SinonStubbedInstance<AnalyticsService>;
-  let notificationTemplateRepositoryMock: sinon.SinonStubbedInstance<NotificationTemplateRepository>;
   let getSubscriberGlobalPreferenceMock: sinon.SinonStubbedInstance<GetSubscriberGlobalPreference>;
   let getSubscriberTemplatePreferenceUsecase: sinon.SinonStubbedInstance<GetSubscriberTemplatePreference>;
   let upsertPreferencesMock: sinon.SinonStubbedInstance<UpsertPreferences>;
-
+  let getWorkflowByIdsUsecase: sinon.SinonStubbedInstance<GetWorkflowByIdsUseCase>;
+  let sendWebhookMessageMock: sinon.SinonStubbedInstance<SendWebhookMessage>;
+  let topicSubscribersRepositoryMock: sinon.SinonStubbedInstance<TopicSubscribersRepository>;
+  let preferencesRepositoryMock: sinon.SinonStubbedInstance<PreferencesRepository>;
+  let featureFlagsServiceMock: sinon.SinonStubbedInstance<FeatureFlagsService>;
   beforeEach(() => {
     subscriberRepositoryMock = sinon.createStubInstance(SubscriberRepository);
-    analyticsServiceMock = sinon.createStubInstance(AnalyticsService);
-    notificationTemplateRepositoryMock = sinon.createStubInstance(NotificationTemplateRepository);
     getSubscriberGlobalPreferenceMock = sinon.createStubInstance(GetSubscriberGlobalPreference);
     getSubscriberTemplatePreferenceUsecase = sinon.createStubInstance(GetSubscriberTemplatePreference);
     upsertPreferencesMock = sinon.createStubInstance(UpsertPreferences);
+    getWorkflowByIdsUsecase = sinon.createStubInstance(GetWorkflowByIdsUseCase);
+    sendWebhookMessageMock = sinon.createStubInstance(SendWebhookMessage);
+    topicSubscribersRepositoryMock = sinon.createStubInstance(TopicSubscribersRepository);
+    preferencesRepositoryMock = sinon.createStubInstance(PreferencesRepository);
+    featureFlagsServiceMock = sinon.createStubInstance(FeatureFlagsService);
 
     updatePreferences = new UpdatePreferences(
-      notificationTemplateRepositoryMock as any,
       subscriberRepositoryMock as any,
-      analyticsServiceMock as any,
       getSubscriberGlobalPreferenceMock as any,
       getSubscriberTemplatePreferenceUsecase as any,
-      upsertPreferencesMock as any
+      upsertPreferencesMock as any,
+      getWorkflowByIdsUsecase as any,
+      sendWebhookMessageMock as any,
+      topicSubscribersRepositoryMock as any,
+      preferencesRepositoryMock as any,
+      featureFlagsServiceMock as any
     );
   });
 
@@ -103,33 +104,12 @@ describe('UpdatePreferences', () => {
     }
   });
 
-  it('should throw exception when workflow is not found', async () => {
-    const command = {
-      environmentId: 'env-1',
-      organizationId: 'org-1',
-      subscriberId: 'test-mockSubscriber',
-      level: PreferenceLevelEnum.TEMPLATE,
-      chat: true,
-      workflowId: 'not-found',
-      includeInactiveChannels: false,
-    };
-
-    subscriberRepositoryMock.findBySubscriberId.resolves(mockedSubscriber);
-    notificationTemplateRepositoryMock.findById.resolves(undefined);
-
-    try {
-      await updatePreferences.execute(command);
-    } catch (error) {
-      expect(error).to.be.instanceOf(Error);
-      expect(error.message).to.equal(`Workflow with id: ${command.workflowId} is not found`);
-    }
-  });
-
   it('should update subscriber preference', async () => {
     const command = {
       environmentId: 'env-1',
       organizationId: 'org-1',
       subscriberId: 'test-mockSubscriber',
+      contextKeys: [],
       level: PreferenceLevelEnum.GLOBAL,
       chat: true,
       includeInactiveChannels: false,
@@ -146,22 +126,9 @@ describe('UpdatePreferences', () => {
         environmentId: command.environmentId,
         organizationId: command.organizationId,
         subscriberId: mockedSubscriber.subscriberId,
+        contextKeys: [],
         includeInactiveChannels: false,
       }),
-    ]);
-
-    expect(analyticsServiceMock.mixpanelTrack.firstCall.args).to.deep.equal([
-      AnalyticsEventsEnum.UPDATE_PREFERENCES,
-      '',
-      {
-        _organization: command.organizationId,
-        _subscriber: mockedSubscriber._id,
-        level: command.level,
-        _workflowId: undefined,
-        channels: {
-          chat: true,
-        },
-      },
     ]);
 
     expect(result).to.deep.equal({
@@ -176,7 +143,7 @@ describe('UpdatePreferences', () => {
       organizationId: 'org-1',
       subscriberId: 'test-mockSubscriber',
       level: PreferenceLevelEnum.TEMPLATE,
-      workflowId: '6447aff3d89122e250412c28',
+      workflowIdOrIdentifier: '6447aff3d89122e250412c28',
       chat: true,
       email: false,
       includeInactiveChannels: false,
@@ -184,25 +151,9 @@ describe('UpdatePreferences', () => {
 
     subscriberRepositoryMock.findBySubscriberId.resolves(mockedSubscriber);
     getSubscriberTemplatePreferenceUsecase.execute.resolves({ ...mockedGlobalPreference });
-    notificationTemplateRepositoryMock.findById.resolves(mockedWorkflow);
+    getWorkflowByIdsUsecase.execute.resolves(mockedWorkflow);
 
     const result = await updatePreferences.execute(command);
-
-    expect(analyticsServiceMock.mixpanelTrack.calledOnce).to.be.true;
-    expect(analyticsServiceMock.mixpanelTrack.firstCall.args).to.deep.equal([
-      AnalyticsEventsEnum.UPDATE_PREFERENCES,
-      '',
-      {
-        _organization: command.organizationId,
-        _subscriber: mockedSubscriber._id,
-        _workflowId: command.workflowId,
-        level: command.level,
-        channels: {
-          chat: true,
-          email: false,
-        },
-      },
-    ]);
 
     expect(result).to.deep.equal({
       level: command.level,
@@ -213,6 +164,79 @@ describe('UpdatePreferences', () => {
         name: mockedWorkflow.name,
         critical: mockedWorkflow.critical,
         tags: mockedWorkflow.tags,
+        data: mockedWorkflow.data,
+        severity: mockedWorkflow.severity,
+      },
+    });
+  });
+
+  it('should throw NotFoundException when the subscriptionIdentifier is not owned by the authenticated subscriber', async () => {
+    const command = {
+      environmentId: 'env-1',
+      organizationId: 'org-1',
+      subscriberId: 'test-mockSubscriber',
+      contextKeys: [],
+      level: PreferenceLevelEnum.TEMPLATE,
+      workflowIdOrIdentifier: '6447aff3d89122e250412c28',
+      subscriptionIdentifier: 'someone-elses-subscription',
+      all: { enabled: false },
+      includeInactiveChannels: false,
+    };
+
+    subscriberRepositoryMock.findBySubscriberId.resolves(mockedSubscriber);
+    getWorkflowByIdsUsecase.execute.resolves(mockedWorkflow);
+    featureFlagsServiceMock.getFlag.resolves(false);
+    topicSubscribersRepositoryMock.buildContextExactMatchQuery = sinon.stub().returns({}) as any;
+    topicSubscribersRepositoryMock.findOne.resolves(null);
+
+    let caught: any;
+    try {
+      await updatePreferences.execute(command);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).to.exist;
+    expect(caught.message).to.contain('someone-elses-subscription');
+    expect(upsertPreferencesMock.upsertTopicSubscriptionPreferences.called).to.equal(false);
+    expect(upsertPreferencesMock.upsertSubscriberWorkflowPreferences.called).to.equal(false);
+
+    const findOneCalls = topicSubscribersRepositoryMock.findOne.getCalls();
+    expect(findOneCalls.length).to.be.greaterThan(0);
+    for (const call of findOneCalls) {
+      expect(call.args[0]).to.have.property('_subscriberId', mockedSubscriber._id);
+    }
+  });
+
+  it('should update subscriber preference when using workflow identifier', async () => {
+    const command = {
+      environmentId: 'env-1',
+      organizationId: 'org-1',
+      subscriberId: 'test-mockSubscriber',
+      level: PreferenceLevelEnum.TEMPLATE,
+      workflowIdOrIdentifier: 'test-trigger', // Using the trigger identifier
+      chat: true,
+      email: false,
+      includeInactiveChannels: false,
+    };
+
+    subscriberRepositoryMock.findBySubscriberId.resolves(mockedSubscriber);
+    getSubscriberTemplatePreferenceUsecase.execute.resolves({ ...mockedGlobalPreference });
+    getWorkflowByIdsUsecase.execute.resolves(mockedWorkflow);
+
+    const result = await updatePreferences.execute(command);
+
+    expect(result).to.deep.equal({
+      level: command.level,
+      ...mockedGlobalPreference.preference,
+      workflow: {
+        id: mockedWorkflow._id,
+        identifier: mockedWorkflow.triggers[0].identifier,
+        name: mockedWorkflow.name,
+        critical: mockedWorkflow.critical,
+        tags: mockedWorkflow.tags,
+        data: mockedWorkflow.data,
+        severity: mockedWorkflow.severity,
       },
     });
   });

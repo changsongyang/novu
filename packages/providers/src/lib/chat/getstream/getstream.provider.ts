@@ -1,14 +1,20 @@
 import { ChatProviderIdEnum } from '@novu/shared';
-import { ChannelTypeEnum, ISendMessageSuccessResponse, IChatOptions, IChatProvider } from '@novu/stateless';
-import axios from 'axios';
+import {
+  ChannelTypeEnum,
+  ENDPOINT_TYPES,
+  IChatOptions,
+  IChatProvider,
+  ISendMessageSuccessResponse,
+  isChannelDataOfType,
+} from '@novu/stateless';
 import { BaseProvider, CasingEnum } from '../../../base.provider';
+import { safeChatWebhookJsonRequest } from '../../../utils/safe-chat-webhook-request';
 import { WithPassthrough } from '../../../utils/types';
 
 export class GetstreamChatProvider extends BaseProvider implements IChatProvider {
   id = ChatProviderIdEnum.GetStream;
   channelType = ChannelTypeEnum.CHAT as ChannelTypeEnum.CHAT;
   protected casing = CasingEnum.SNAKE_CASE;
-  private axiosInstance = axios.create();
 
   constructor(
     private config: {
@@ -23,19 +29,29 @@ export class GetstreamChatProvider extends BaseProvider implements IChatProvider
     data: IChatOptions,
     bridgeProviderData: WithPassthrough<Record<string, unknown>> = {}
   ): Promise<ISendMessageSuccessResponse> {
+    if (!isChannelDataOfType(data.channelData, ENDPOINT_TYPES.WEBHOOK)) {
+      throw new Error('Invalid channel data for Getstream provider');
+    }
+
+    const { endpoint } = data.channelData;
+
     const transformedData = this.transform(bridgeProviderData, {
       text: data.content,
     });
-    const response = await this.axiosInstance.post(data.webhookUrl, {
-      ...transformedData.body,
-      headers: {
-        'X-API-KEY': this.config.apiKey,
-        ...transformedData.headers,
+    // GetStream expects auth metadata inside the JSON payload, not as HTTP headers.
+    const response = await safeChatWebhookJsonRequest({
+      url: endpoint.url,
+      body: {
+        ...transformedData.body,
+        headers: {
+          'X-API-KEY': this.config.apiKey,
+          ...transformedData.headers,
+        },
       },
     });
 
     return {
-      id: response.headers['X-WEBHOOK-ID'],
+      id: response.headers['x-webhook-id'] as string,
       date: new Date().toISOString(),
     };
   }

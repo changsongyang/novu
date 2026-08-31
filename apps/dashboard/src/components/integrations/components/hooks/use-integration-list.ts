@@ -1,17 +1,29 @@
+import {
+  ChannelTypeEnum,
+  ChatProviderIdEnum,
+  EmailProviderIdEnum,
+  IProviderConfig,
+  NOVU_PROVIDERS,
+  ProvidersIdEnum,
+  PushProviderIdEnum,
+  providers,
+  SmsProviderIdEnum,
+  ToolProviderIdEnum,
+} from '@novu/shared';
 import { useMemo } from 'react';
-import { ChannelTypeEnum, ChatProviderIdEnum, IProviderConfig, PushProviderIdEnum } from '@novu/shared';
-import { providers, EmailProviderIdEnum, SmsProviderIdEnum } from '@novu/shared';
-import { ProvidersIdEnum } from '@novu/shared';
 
 export function useIntegrationList(searchQuery: string = '') {
-  const filteredIntegrations = useMemo(() => {
+  const normalizedSearchQuery = searchQuery.trim();
+
+  const catalogProviders = useMemo(() => {
     if (!providers) return [];
 
-    const filtered = providers.filter(
-      (provider: IProviderConfig) =>
-        provider.displayName.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        provider.id !== EmailProviderIdEnum.Novu &&
-        provider.id !== SmsProviderIdEnum.Novu
+    return providers.filter((provider: IProviderConfig) => !NOVU_PROVIDERS.includes(provider.id));
+  }, []);
+
+  const filteredIntegrations = useMemo(() => {
+    const filtered = catalogProviders.filter((provider: IProviderConfig) =>
+      provider.displayName.toLowerCase().includes(normalizedSearchQuery.toLowerCase())
     );
 
     const popularityOrder: Record<ChannelTypeEnum, ProvidersIdEnum[]> = {
@@ -46,6 +58,13 @@ export function useIntegrationList(searchQuery: string = '') {
         ChatProviderIdEnum.Discord,
         ChatProviderIdEnum.MsTeams,
         ChatProviderIdEnum.Mattermost,
+        ChatProviderIdEnum.ChatWebhook,
+      ],
+      [ChannelTypeEnum.TOOL]: [
+        ToolProviderIdEnum.PagerDuty,
+        ToolProviderIdEnum.Opsgenie,
+        ToolProviderIdEnum.Grafana,
+        ToolProviderIdEnum.Webhook,
       ],
       [ChannelTypeEnum.IN_APP]: [],
     };
@@ -64,7 +83,7 @@ export function useIntegrationList(searchQuery: string = '') {
 
       return 0;
     });
-  }, [providers, searchQuery]);
+  }, [catalogProviders, normalizedSearchQuery]);
 
   const integrationsByChannel = useMemo(() => {
     return Object.values(ChannelTypeEnum).reduce(
@@ -78,6 +97,7 @@ export function useIntegrationList(searchQuery: string = '') {
   }, [filteredIntegrations]);
 
   return {
+    catalogProviders,
     filteredIntegrations,
     integrationsByChannel,
   };

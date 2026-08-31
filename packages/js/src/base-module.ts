@@ -5,14 +5,13 @@ import { NovuError } from './utils/errors';
 
 interface CallQueueItem {
   fn: () => Promise<unknown>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resolve: (value: any | PromiseLike<any>) => void;
   reject: (reason?: unknown) => void;
 }
 
 export class BaseModule {
-  protected _inboxService: InboxService;
-  protected _emitter: NovuEventEmitter;
+  _inboxService: InboxService;
+  _emitter: NovuEventEmitter;
   #callsQueue: CallQueueItem[] = [];
   #sessionError: unknown;
 
@@ -47,7 +46,7 @@ export class BaseModule {
 
   protected onSessionError(_: unknown): void {}
 
-  async callWithSession<T>(fn: () => Result<T>): Result<T> {
+  async callWithSession<T, E = NovuError>(fn: () => Result<T, E>): Result<T, E> {
     if (this._inboxService.isSessionInitialized) {
       return fn();
     }
@@ -55,7 +54,7 @@ export class BaseModule {
     if (this.#sessionError) {
       return Promise.resolve({
         error: new NovuError('Failed to initialize session, please contact the support', this.#sessionError),
-      });
+      }) as Result<T, E>;
     }
 
     return new Promise((resolve, reject) => {

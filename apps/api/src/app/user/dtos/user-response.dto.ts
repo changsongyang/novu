@@ -3,21 +3,12 @@ import { IUserEntity, JobTitleEnum } from '@novu/shared';
 
 export class ServicesHashesDto {
   @ApiProperty()
-  intercom?: string;
-
-  @ApiProperty()
   plain?: string;
 }
 
 export class UserResponseDto implements IUserEntity {
   @ApiProperty()
   _id: string;
-
-  @ApiPropertyOptional()
-  resetToken?: string;
-
-  @ApiPropertyOptional()
-  resetTokenDate?: string;
 
   @ApiProperty()
   firstName?: string | null;

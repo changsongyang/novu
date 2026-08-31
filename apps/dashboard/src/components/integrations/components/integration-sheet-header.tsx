@@ -1,7 +1,8 @@
-import { SheetHeader, SheetTitle } from '@/components/primitives/sheet';
 import { IProviderConfig } from '@novu/shared';
 import { RiArrowLeftSLine } from 'react-icons/ri';
+import { SheetHeader, SheetTitle } from '@/components/primitives/sheet';
 import { CompactButton } from '../../primitives/button-compact';
+import { ProviderDeprecatedBadge } from './provider-deprecation';
 import { ProviderIcon } from './provider-icon';
 
 type IntegrationSheetHeaderProps = {
@@ -18,7 +19,12 @@ export function IntegrationSheetHeader({ provider, mode, onBack, step }: Integra
         <SheetTitle className="text-lg">Connect Integration</SheetTitle>
         <p className="text-foreground-400 text-xs">
           Select an integration to connect with your application.{' '}
-          <a href="https://docs.novu.co/docs/integrations" target="_blank" className="underline">
+          <a
+            href="https://docs.novu.co/platform/integrations/overview"
+            target="_blank"
+            className="underline"
+            rel="noopener"
+          >
             Learn More
           </a>
         </p>
@@ -45,6 +51,7 @@ export function IntegrationSheetHeader({ provider, mode, onBack, step }: Integra
             <ProviderIcon providerId={provider.id} providerDisplayName={provider.displayName} />
           </div>
           <div className="text-md text-foreground-950 leading-6">{provider.displayName}</div>
+          <ProviderDeprecatedBadge provider={provider} />
         </div>
       </SheetTitle>
     </SheetHeader>

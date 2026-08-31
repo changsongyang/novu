@@ -1,4 +1,6 @@
+import { execSync } from 'child_process';
 import { compress } from 'esbuild-plugin-compress';
+import inlineImportPlugin from 'esbuild-plugin-inline-import';
 import { solidPlugin } from 'esbuild-plugin-solid';
 import fs from 'fs';
 import path from 'path';
@@ -23,18 +25,45 @@ const buildCSS = async () => {
 };
 
 const isProd = process.env.NODE_ENV === 'production';
+const isPreview = process.env.IS_PREVIEW === 'true';
+
+let previewLastCommitHash: string | undefined; // Default value
+if (isPreview) {
+  try {
+    previewLastCommitHash = execSync('git rev-parse HEAD').toString().trim();
+  } catch (error) {
+    console.error('Error getting commit hash:', error);
+    // Optionally re-throw or handle as needed.
+  }
+}
 
 const baseConfig: Options = {
   splitting: true,
   sourcemap: false,
   clean: true,
-  esbuildPlugins: [solidPlugin()],
+  esbuildPlugins: [
+    inlineImportPlugin({
+      filter: /^directcss:/,
+      transform: async (contents, args) => {
+        const processedCss = processCSS(contents, args.path);
+
+        return processedCss;
+      },
+    }),
+    solidPlugin(),
+  ],
 };
 
 const baseModuleConfig: Options = {
   ...baseConfig,
   treeshake: true,
-  dts: true,
+  dts: {
+    resolve: ['@novu/agent-event-protocol'],
+    compilerOptions: {
+      stripInternal: true,
+    },
+  },
+  noExternal: ['@novu/agent-event-protocol'],
   entry: {
     index: './src/index.ts',
     'ui/index': './src/ui/index.ts',
@@ -46,6 +75,7 @@ const baseModuleConfig: Options = {
     PACKAGE_NAME: `"${name}"`,
     PACKAGE_VERSION: `"${version}"`,
     __DEV__: `${isProd ? false : true}`,
+    __PREVIEW_LAST_COMMIT_HASH__: `"${previewLastCommitHash || ''}"`,
   },
 };
 
@@ -70,6 +100,7 @@ export default defineConfig((config: Options) => {
     format: ['iife'],
     minify: true,
     dts: false,
+    noExternal: ['@novu/agent-event-protocol'],
     outExtension: () => {
       return {
         js: '.min.js',
@@ -84,7 +115,9 @@ export default defineConfig((config: Options) => {
         exclude: ['**/*.map'],
       }),
     ],
-    onSuccess: async () => await buildCSS(),
+    onSuccess: async () => {
+      await buildCSS();
+    },
   };
 
   return [cjs, esm, umd];

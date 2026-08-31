@@ -1,5 +1,5 @@
+import { SubscriberResponseDto } from '@novu/application-generic';
 import { SubscriberEntity } from '@novu/dal';
-import { SubscriberResponseDto } from '../../../subscribers/dtos';
 
 export function mapSubscriberEntityToDto(subscriber: SubscriberEntity): SubscriberResponseDto {
   return {
@@ -8,6 +8,7 @@ export function mapSubscriberEntityToDto(subscriber: SubscriberEntity): Subscrib
     lastName: subscriber.lastName,
     email: subscriber.email,
     phone: subscriber.phone,
+    avatar: subscriber.avatar,
     subscriberId: subscriber.subscriberId,
     createdAt: subscriber.createdAt,
     updatedAt: subscriber.updatedAt,
@@ -15,10 +16,10 @@ export function mapSubscriberEntityToDto(subscriber: SubscriberEntity): Subscrib
     _organizationId: subscriber._organizationId,
     deleted: subscriber.deleted,
     data: subscriber.data,
-    lastOnlineAt: subscriber.lastOnlineAt,
-    isOnline: subscriber.isOnline,
+    lastOnlineAt: subscriber.lastOnlineAt ?? null,
+    isOnline: subscriber.isOnline ?? null,
     topics: subscriber.topics,
-    channels: subscriber.channels,
+    channels: subscriber.channels ?? [],
     locale: subscriber.locale,
     timezone: subscriber.timezone,
   };

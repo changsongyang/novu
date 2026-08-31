@@ -1,5 +1,11 @@
-import type { IOrganizationEntity, IServicesHashes, IUserEntity, JobTitleEnum, ProductUseCases } from '@novu/shared';
-import { OrganizationResource, UserResource } from '@clerk/types';
+import type { OrganizationResource, UserResource } from '@clerk/shared/types';
+import {
+  type IOrganizationEntity,
+  type IServicesHashes,
+  type IUserEntity,
+  type JobTitleEnum,
+  type ProductUseCases,
+} from '@novu/shared';
 
 export const toUserEntity = (clerkUser: UserResource): IUserEntity => {
   /*
@@ -14,7 +20,7 @@ export const toUserEntity = (clerkUser: UserResource): IUserEntity => {
     _id: clerkUser.externalId as string,
     firstName: clerkUser.firstName,
     lastName: clerkUser.lastName,
-    email: clerkUser.emailAddresses[0].emailAddress,
+    email: clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses?.[0]?.emailAddress ?? '',
     profilePicture: clerkUser.imageUrl,
     createdAt: clerkUser.createdAt?.toISOString() ?? '',
     showOnBoarding: !!clerkUser.publicMetadata.showOnBoarding,

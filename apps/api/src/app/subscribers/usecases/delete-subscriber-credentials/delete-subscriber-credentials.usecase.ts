@@ -1,25 +1,27 @@
-import { Injectable } from '@nestjs/common';
-import { SubscriberRepository } from '@novu/dal';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { AnalyticsService, buildSubscriberKey, InvalidateCacheService } from '@novu/application-generic';
-
+import { SubscriberRepository } from '@novu/dal';
 import { DeleteSubscriberCredentialsCommand } from './delete-subscriber-credentials.command';
-import { GetSubscriberCommand, GetSubscriber } from '../get-subscriber';
 
 @Injectable()
 export class DeleteSubscriberCredentials {
   constructor(
     private invalidateCache: InvalidateCacheService,
     private subscriberRepository: SubscriberRepository,
-    private analyticsService: AnalyticsService,
-    private getSubscriberUseCase: GetSubscriber
+    private analyticsService: AnalyticsService
   ) {}
 
   async execute(command: DeleteSubscriberCredentialsCommand): Promise<void> {
-    const foundSubscriber = await this.getSubscriberUseCase.execute(
-      GetSubscriberCommand.create({
-        ...command,
-      })
+    const foundSubscriber = await this.subscriberRepository.findBySubscriberId(
+      command.environmentId,
+      command.subscriberId,
+      true,
+      '_id subscriberId'
     );
+
+    if (!foundSubscriber) {
+      throw new NotFoundException(`Subscriber '${command.subscriberId}' was not found`);
+    }
 
     await this.deleteSubscriberCredentialsOfOneProvider(
       foundSubscriber.subscriberId,
